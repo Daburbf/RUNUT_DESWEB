@@ -1,0 +1,28 @@
+RUNUT
+
+Runut itu web buat bantu ngecek tulisan Bahasa Indonesia.
+Caranya gampang, tinggal tempel tulisan, nanti kelihatan bagian mana yang janggal, kaku, atau kedengeran kayak hasil AI. Tiap bagian dikasih saran biar enak dibaca, terus bisa diterima satu-satu atau langsung semua. Hasilnya bisa disalin, diunduh, sama disimpen di riwayat.
+
+Daftar use case:
+UC-01 Daftar akun
+UC-02 Masuk
+UC-03 Keluar
+UC-04 Lihat beranda
+UC-05 Lihat tentang
+UC-06 Tempel tulisan
+UC-07 Upload .txt
+UC-08 Lihat nilai
+UC-09 Klik sorotan
+UC-10 Terima saran
+UC-11 Tolak saran
+UC-12 Ubah saran
+UC-13 Terima semua
+UC-14 Bandingkan hasil
+UC-15 Salin revisi
+UC-16 Unduh .txt
+UC-17 Simpan ke riwayat
+UC-18 Cari di riwayat
+UC-19 Buka detail dokumen
+UC-20 Lanjut dari riwayat
+UC-21 Hapus dari riwayat
+UC-22 Tampilan HP/tablet/laptop
