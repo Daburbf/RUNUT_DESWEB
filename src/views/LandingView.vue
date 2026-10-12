@@ -2,27 +2,26 @@
 import BaseButton from '../components/BaseButton.vue'
 import SectionLabel from '../components/SectionLabel.vue'
 import FeatureCard from '../components/FeatureCard.vue'
-import { CATEGORIES } from '../utils/analyzer'
+import { CATEGORIES } from '../utils/categories'
 import { auth } from '../store/auth'
 const desc = {
-  repetition: 'Kata yang sama nongol berkali-kali? Nanti ditandain, sekalian dikasih alternatifnya.',
-  sentence: 'Kalimat yang kepanjangan dipecah biar enak dibaca, nggak ngos-ngosan.',
-  similarity: 'Dua kalimat yang isinya mirip bakal ketahuan, lengkap sama persennya.',
-  ai: 'Ngecek tulisanmu berasa kayak tulisan AI atau tulisan orang beneran.',
-  formality: 'Kata kayak "gak" atau "banget" dibenerin jadi bentuk yang lebih pas.',
-  consistency: 'Misal awalnya pakai "saya" terus tiba-tiba "aku", itu diingetin.',
+  repetition: 'Kata yang sama muncul berkali-kali? Ditandai beserta alternatifnya.',
+  sentence_pattern: 'Kalimat yang terlalu panjang atau berpola sama dipecah agar enak dibaca.',
+  uniform_structure: 'Rangkaian kalimat berstruktur seragam ditandai agar ritmenya bervariasi.',
+  transition: 'Kata transisi yang hilang atau dipakai berulang ditinjau ulang.',
+  formality: 'Kata tidak baku seperti "gak" atau "banget" disarankan bentuk bakunya.',
+  style_consistency: 'Campuran kata ganti atau gaya (mis. "saya" vs "aku") diingatkan.',
 }
 const steps = [
-  { n: '01', t: 'Tempel tulisan', d: 'Copy-paste teks kamu, atau upload file .txt. Bisa juga pencet "pakai contoh" kalau cuma mau nyoba-nyoba dulu.' },
-  { n: '02', t: 'Lihat yang ditandain', d: 'Bagian yang pengulangan, kaku, atau generik bakal dikasih garis bawah. Klik aja tandanya buat lihat sarannya.' },
-  { n: '03', t: 'Beresiin satu-satu', d: 'Setiap saran bisa diterima, ditolak, atau diubah manual. Bebas, nggak ada paksaan.' },
+  { n: '01', t: 'Tempel tulisan', d: 'Tempel teks atau unggah TXT/DOCX/PDF (maks 5 MB). Gratis sampai 500 kata, Premium sampai 10.000 kata.' },
+  { n: '02', t: 'Lihat yang ditandai', d: 'Bagian bermasalah digarisbawahi sesuai kategorinya. Klik untuk melihat penjelasan dan saran.' },
+  { n: '03', t: 'Selesaikan satu per satu', d: 'Terima, tolak, terima semua yang aman, atau pulihkan teks asli. Premium membuka semua saran.' },
 ]
 const keys = Object.keys(CATEGORIES)
 </script>
 
 <template>
   <div>
-    <!-- 01 / HERO — tipografi raksasa + komposisi geometri Bauhaus -->
     <section class="border-b-4 border-black">
       <div class="mx-auto grid max-w-6xl md:grid-cols-[8fr_4fr]">
         <div class="px-4 py-14 sm:px-6 md:py-24">
@@ -31,39 +30,37 @@ const keys = Object.keys(CATEGORIES)
             Tulisanmu,<br />lebih <span class="bg-[#FF3000] px-2 text-white">runut</span>.
           </h1>
           <p class="mt-6 max-w-xl text-base leading-relaxed text-black/70">
-            Buat kamu yang sering nulis tugas, esai, atau laporan terus ngerasa tulisannya
-            gitu-gitu aja. Tempel ke sini, nanti kelihatan bagian mana yang perlu dibenerin.
+            Untuk tugas, esai, atau laporan berbahasa Indonesia yang terasa monoton.
+            Tempel ke sini, nanti kelihatan bagian mana yang perlu dibenahi — dengan penjelasan spesifik, bukan skor rekaan.
           </p>
           <div class="mt-8 flex flex-col gap-3 sm:flex-row">
             <BaseButton :to="auth.user ? '/analisis' : '/daftar'" size="lg">Coba sekarang <i class="fa-solid fa-arrow-right text-xs"></i></BaseButton>
-            <BaseButton to="/tentang" variant="secondary" size="lg">Kenapa bikin ini?</BaseButton>
+            <BaseButton to="/tentang" variant="secondary" size="lg">Tentang aplikasi</BaseButton>
           </div>
           <div class="mt-10 flex flex-wrap gap-6 border-t-2 border-black pt-6">
-            <p class="font-mono text-xs uppercase tracking-widest"><span class="text-2xl font-black">6</span><br />Yang dicek</p>
-            <p class="font-mono text-xs uppercase tracking-widest"><span class="text-2xl font-black">5K</span><br />Kata maks.</p>
+            <p class="font-mono text-xs uppercase tracking-widest"><span class="text-2xl font-black">6</span><br />Kategori dicek</p>
+            <p class="font-mono text-xs uppercase tracking-widest"><span class="text-2xl font-black">500</span><br />Kata gratis</p>
             <p class="font-mono text-xs uppercase tracking-widest"><span class="text-2xl font-black">ID</span><br />Bhs. Indonesia</p>
           </div>
         </div>
-        <!-- Panel visual: patung Yunani full -->
-        <div class="relative min-h-[480px] overflow-hidden border-l-4 border-black bg-[#F2F2F2] md:flex" aria-hidden="true">
-          <img src="/images/yunani.png" alt="" class="absolute inset-0 h-full w-full object-cover" />
+        <div class="relative hidden min-h-[480px] overflow-hidden border-l-4 border-black bg-[#F2F2F2] md:flex" aria-hidden="true">
+          <div class="swiss-diagonal absolute inset-0"></div>
+          <p class="absolute bottom-8 left-8 right-8 border-2 border-black bg-white p-4 font-mono text-xs uppercase tracking-widest">Tempel → tandai → perbaiki → unduh</p>
         </div>
       </div>
     </section>
 
-    <!-- 02 / KATEGORI -->
     <section class="mx-auto max-w-6xl px-4 py-16 sm:px-6 md:py-24">
       <SectionLabel>02 / Yang dicek — Enam hal</SectionLabel>
       <div class="mt-6 grid gap-8 md:grid-cols-[5fr_7fr] md:items-end">
         <h2 class="text-4xl font-black uppercase leading-[0.95] tracking-tighter md:text-6xl">Bukan cek typo. Cek kebiasaan.</h2>
-        <p class="text-black/70 md:pb-1">Fokusnya ke hal-hal kecil yang bikin tulisan berasa monoton, tapi sering nggak sadar pas nulis.</p>
+        <p class="text-black/70 md:pb-1">Enam kategori analisis sesuai rancangan: pengulangan kata, pola kalimat, struktur seragam, transisi, formalitas, dan konsistensi gaya.</p>
       </div>
       <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <FeatureCard v-for="(k, i) in keys" :key="k" :icon="CATEGORIES[k].icon" :title="CATEGORIES[k].label" :desc="desc[k]" :num="CATEGORIES[k].num || `0${i + 1}`" />
       </div>
     </section>
 
-    <!-- 03 / CARA KERJA — baris bernomor, pola diagonal -->
     <section class="border-y-4 border-black bg-[#F2F2F2]">
       <div class="swiss-diagonal mx-auto grid max-w-6xl md:grid-cols-[5fr_7fr]">
         <div class="border-b-4 border-black p-8 md:border-b-0 md:border-r-4 md:p-12">
@@ -83,15 +80,14 @@ const keys = Object.keys(CATEGORIES)
       </div>
     </section>
 
-    <!-- 04 / CTA -->
     <section class="mx-auto max-w-6xl px-4 py-16 sm:px-6 md:py-24">
       <div class="border-4 border-black bg-black p-8 text-white md:p-16">
         <SectionLabel>04 / Mulai</SectionLabel>
         <h2 class="mt-6 max-w-3xl text-4xl font-black uppercase leading-[0.95] tracking-tighter md:text-7xl">Udah, langsung coba aja.</h2>
-        <p class="mt-4 max-w-xl text-white/60">Daftar dulu, gratis. Nggak diminta kartu kredit atau apa-apa.</p>
+        <p class="mt-4 max-w-xl text-white/60">Daftar dulu, gratis. Akun gratis bisa menganalisis sampai 500 kata; butuh lebih? Ada Premium via Midtrans.</p>
         <div class="mt-8 flex flex-col gap-3 sm:flex-row">
           <BaseButton :to="auth.user ? '/analisis' : '/daftar'" variant="accent" size="lg">Mulai nulis</BaseButton>
-          <BaseButton to="/riwayat" variant="ghost" size="lg" class="!border-white !text-white hover:!bg-white hover:!text-black">Lihat riwayat</BaseButton>
+          <BaseButton to="/premium" variant="ghost" size="lg" class="!border-white !text-white hover:!bg-white hover:!text-black">Lihat Premium</BaseButton>
         </div>
       </div>
     </section>

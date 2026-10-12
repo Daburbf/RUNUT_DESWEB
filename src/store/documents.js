@@ -1,37 +1,40 @@
-// Dokumen & riwayat pemeriksaan per pengguna
-import { auth } from './auth'
+// Akses dokumen via backend. Draf analisis aktif tetap di sessionStorage agar
+// refresh di halaman hasil tidak menghilangkan konteks.
+import { api, apiBase, tokens } from '../utils/api';
 
-const storage = (mode) => {
-  try {
-    const s = mode === 'session' ? sessionStorage : localStorage
-    s.setItem('__t', '1'); s.removeItem('__t')
-    return s
-  } catch { return null }
-}
-const mem = new Map()
-const fallback = (mode) => ({
-  getItem: (k) => (mem.has(mode + k) ? mem.get(mode + k) : null),
-  setItem: (k, v) => mem.set(mode + k, String(v)),
-  removeItem: (k) => mem.delete(mode + k),
-})
-const ls = () => storage('local') ?? fallback('local')
-const ss = () => storage('session') ?? fallback('session')
-
-const key = () => `runut_docs_${auth.user?.id}`
-const all = () => { try { return JSON.parse(ls().getItem(key())) ?? [] } catch { return [] } }
-const persist = (docs) => { try { ls().setItem(key(), JSON.stringify(docs)) } catch {} }
-
-// Draf aktif (dokumen yang sedang dianalisis)
-let current = null
+const DRAFT_KEY = 'runut_current_v2';
 
 export const documents = {
-  list: () => all().sort((a, b) => b.updated_at - a.updated_at),
-  get: (id) => all().find((d) => d.id === id),
-  setCurrent(doc) { current = doc; try { ss().setItem('runut_current', JSON.stringify(doc)) } catch {} },
-  getCurrent() { try { return current ?? JSON.parse(ss().getItem('runut_current') || 'null') } catch { return current } },
-  save(doc) {
-    const docs = all().filter((d) => d.id !== doc.id)
-    docs.push({ ...doc, updated_at: Date.now() }); persist(docs)
+  setCurrent(doc) {
+    try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(doc)); } catch { /* abaikan */ }
   },
-  remove(id) { persist(all().filter((d) => d.id !== id)) },
-}
+  getCurrent() {
+    try { return JSON.parse(sessionStorage.getItem(DRAFT_KEY) || 'null'); } catch { return null; }
+  },
+  clearCurrent() {
+    try { sessionStorage.removeItem(DRAFT_KEY); } catch { /* abaikan */ }
+  },
+
+  list: (q) => api(`/api/documents${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+  get: (id) => api(`/api/documents/${id}`),
+  decide: (id, body) => api(`/api/documents/${id}/issues`, { method: 'PATCH', body }),
+  restore: (id) => api(`/api/documents/${id}/restore`, { method: 'POST', body: {} }),
+  rename: (id, title) => api(`/api/documents/${id}/title`, { method: 'PATCH', body: { title } }),
+  removeMany: (ids) => api('/api/documents', { method: 'DELETE', body: { ids } }),
+
+  // Unduh via fetch berautentikasi (token di header, bukan query) lalu blob.
+  async download(id, format, filename) {
+    const res = await fetch(`${apiBase}/api/documents/${id}/download?format=${format}`, {
+      headers: { Authorization: `Bearer ${tokens.access || ''}` },
+    });
+    if (!res.ok) throw new Error('Unduhan gagal. Coba lagi.');
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename || `runut-revisi.${format === 'docx' ? 'docx' : 'txt'}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  },
+};

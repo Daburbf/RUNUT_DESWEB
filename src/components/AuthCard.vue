@@ -1,5 +1,4 @@
 <script setup>
-import logoUrl from '/images/logo.svg'
 defineProps({ title: String, subtitle: String })
 </script>
 <template>
@@ -9,7 +8,7 @@ defineProps({ title: String, subtitle: String })
     <div class="grid border-4 border-black md:grid-cols-[7fr_5fr]">
       <div class="swiss-dots relative hidden flex-col justify-between bg-black p-8 text-white md:flex md:p-12">
         <div class="flex items-center gap-3">
-          <img :src="logoUrl" alt="" class="h-10 w-10 border-2 border-white" />
+          <span class="flex h-10 w-10 items-center justify-center border-2 border-white font-mono text-base font-black">R</span>
           <span class="text-xl font-black uppercase tracking-tighter">Runut</span>
         </div>
         <div>

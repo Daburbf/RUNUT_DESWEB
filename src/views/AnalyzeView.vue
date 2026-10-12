@@ -4,35 +4,63 @@ import { useRouter } from 'vue-router'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
 import SectionLabel from '../components/SectionLabel.vue'
-import { analyze } from '../utils/analyzer'
+import { api } from '../utils/api'
+import { auth } from '../store/auth'
 import { documents } from '../store/documents'
+import { FREE_WORD_LIMIT, PREMIUM_WORD_LIMIT } from '../utils/categories'
 
-const SAMPLE = `Menulis adalah hal yang sangat penting bagi pelajar. Menulis membantu kita berpikir dengan runtut. Selain itu, menulis juga sangat penting untuk karier. Selain itu, banyak orang gak sadar kalau tulisan mereka terasa kaku banget. Saya sering menulis setiap hari, dan aku merasa kemampuan menulis sangat penting untuk masa depan, karena dengan menulis kita bisa menyampaikan gagasan, membangun argumen yang kuat, serta meyakinkan pembaca bahwa ide yang kita sampaikan memang layak untuk dipertimbangkan secara serius oleh banyak pihak.`
+const SAMPLE = `Menulis adalah hal yang sangat penting bagi pelajar. Menulis membantu kita berpikir dengan runtut. Selain itu, menulis juga sangat penting untuk karier. Selain itu, banyak orang tidak sadar kalau tulisan mereka terasa kaku. Saya sering menulis setiap hari, dan saya merasa kemampuan menulis sangat penting untuk masa depan, karena dengan menulis kita bisa menyampaikan gagasan, membangun argumen yang kuat, serta meyakinkan pembaca bahwa ide yang kita sampaikan memang layak untuk dipertimbangkan secara serius oleh banyak pihak.`
 
 const title = ref('')
 const text = ref('')
+const file = ref(null)
 const loading = ref(false)
 const error = ref('')
 const router = useRouter()
-const words = computed(() => (text.value.trim() ? text.value.trim().split(/\s+/).length : 0))
-const MAX = 5000
 
-function run() {
+const words = computed(() => (text.value.trim() ? text.value.trim().split(/\s+/).length : 0))
+const limit = computed(() => (auth.user?.is_premium ? PREMIUM_WORD_LIMIT : FREE_WORD_LIMIT))
+
+async function run() {
   error.value = ''
-  if (words.value < 20) return (error.value = 'Tulisannya kurang panjang, minimal 20 kata ya.')
-  if (words.value > MAX) return (error.value = `Kepanjangan, maksimal ${MAX} kata aja.`)
+  if (words.value < 20 && !file.value) { error.value = 'Tulisannya kurang panjang, minimal 20 kata ya.'; return }
+  if (words.value > limit.value) { error.value = `Kepanjangan untuk akun ${auth.user?.is_premium ? 'Premium' : 'gratis'} (maks ${limit.value} kata).`; return }
   loading.value = true
-  setTimeout(() => {
-    const result = analyze(text.value)
-    documents.setCurrent({ id: 'd' + Date.now(), title: title.value.trim() || 'Dokumen tanpa judul', original_text: text.value, result })
-    loading.value = false
+  try {
+    let data
+    if (file.value) {
+      const form = new FormData()
+      form.append('file', file.value)
+      if (title.value.trim()) form.append('title', title.value.trim())
+      const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:3000').replace(/\/$/, '') + '/api/analysis', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('runut_access') || ''}` },
+        body: form,
+      })
+      data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || 'Analisis gagal.')
+    } else {
+      data = await api('/api/analysis', { method: 'POST', body: { text: text.value, title: title.value.trim() || 'Dokumen tanpa judul' } })
+    }
+    documents.setCurrent(data)
     router.push('/hasil')
-  }, 900)
+  } catch (e) {
+    error.value = e.message || 'Analisis gagal. Coba lagi.'
+  } finally {
+    loading.value = false
+  }
 }
+
 function onFile(e) {
-  const f = e.target.files[0]; if (!f) return
-  if (!f.name.endsWith('.txt')) return (error.value = 'File-nya harus .txt ya, yang lain belum bisa.')
-  f.text().then((t) => { text.value = t; title.value ||= f.name.replace(/\.txt$/, '') })
+  const f = e.target.files[0]
+  file.value = null
+  if (!f) return
+  if (f.size > 5 * 1024 * 1024) { error.value = 'Filenya kegedean, maksimal 5 MB.'; return }
+  if (!/\.(txt|docx|pdf)$/i.test(f.name)) { error.value = 'File-nya harus .txt, .docx, atau .pdf ya.'; return }
+  file.value = f
+  title.value ||= f.name.replace(/\.(txt|docx|pdf)$/i, '')
+  if (/\.txt$/i.test(f.name)) f.text().then((t) => { text.value = t }).catch(() => {})
+  error.value = ''
 }
 </script>
 
@@ -42,13 +70,13 @@ function onFile(e) {
       <div>
         <SectionLabel>Analisis baru</SectionLabel>
         <h1 class="mt-4 text-5xl font-black uppercase leading-[0.9] tracking-tighter md:text-6xl">Tempel tulisanmu di sini</h1>
-        <p class="mt-4 text-black/70">Copy-paste aja teksnya, atau upload file .txt kalau udah ada. Mau nyoba dulu? Pencet tombol contoh.</p>
+        <p class="mt-4 text-black/70">Tempel teks atau unggah file. Batas akunmu: <strong>{{ auth.user?.is_premium ? '10.000 kata (Premium)' : '500 kata (Gratis)' }}</strong>. Tanpa Premium? <router-link to="/premium" class="underline decoration-[#FF3000] decoration-2 underline-offset-4">Lihat Premium</router-link>.</p>
         <div class="swiss-dots mt-8 border-2 border-black bg-[#F2F2F2] p-6">
           <p class="font-mono text-xs uppercase tracking-widest text-[#FF3000]">Syaratnya</p>
           <ul class="mt-3 space-y-2 text-sm font-bold uppercase tracking-wide">
             <li class="flex gap-2"><span class="text-[#FF3000]">■</span> Paling dikit 20 kata</li>
-            <li class="flex gap-2"><span class="text-[#FF3000]">■</span> Paling banyak 5.000 kata</li>
-            <li class="flex gap-2"><span class="text-[#FF3000]">■</span> File .txt doang yang bisa diupload</li>
+            <li class="flex gap-2"><span class="text-[#FF3000]">■</span> Maks {{ limit }} kata</li>
+            <li class="flex gap-2"><span class="text-[#FF3000]">■</span> File .txt / .docx / .pdf, maks 5 MB</li>
           </ul>
         </div>
       </div>
@@ -59,16 +87,17 @@ function onFile(e) {
         </div>
         <textarea v-model="text" rows="14" placeholder="Tulis atau tempel teks kamu di sini…"
           class="w-full flex-1 resize-y bg-transparent p-4 text-[15px] leading-7 focus:outline-none sm:p-6"></textarea>
+        <p v-if="file" class="border-t-2 border-black bg-[#F2F2F2] px-4 py-2 font-mono text-xs uppercase tracking-widest sm:px-6">File: {{ file.name }} ({{ (file.size / 1024).toFixed(0) }} KB) <button class="ml-2 underline" @click="file = null">batal</button></p>
         <div class="flex flex-col gap-3 border-t-2 border-black p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div class="flex flex-wrap items-center gap-2">
             <label class="swiss-snap-fast min-h-[44px] cursor-pointer border-2 border-black bg-white px-3 py-2 text-xs font-bold uppercase tracking-widest hover:bg-black hover:text-white">
-              <i class="fa-solid fa-file-arrow-up mr-1.5"></i>Upload .txt<input type="file" accept=".txt" class="hidden" @change="onFile" />
+              <i class="fa-solid fa-file-arrow-up mr-1.5"></i>Upload<input type="file" accept=".txt,.docx,.pdf" class="hidden" @change="onFile" />
             </label>
             <button class="swiss-snap-fast min-h-[44px] border-2 border-black bg-white px-3 py-2 text-xs font-bold uppercase tracking-widest hover:bg-black hover:text-white" @click="text = SAMPLE; title ||= 'Contoh esai'"><i class="fa-solid fa-flask mr-1.5"></i>Coba contoh</button>
             <button v-if="text" class="min-h-[44px] px-3 py-2 text-xs font-bold uppercase tracking-widest text-black/60 hover:text-[#FF3000]" @click="text = ''">Hapus semua</button>
           </div>
           <div class="flex items-center gap-4">
-            <span :class="['font-mono text-xs font-bold', words > MAX ? 'bg-[#FF3000] px-2 py-1 text-white' : '']">{{ words }} / {{ MAX }} kata</span>
+            <span :class="['font-mono text-xs font-bold', words > limit ? 'bg-[#FF3000] px-2 py-1 text-white' : '']">{{ words }} / {{ limit }} kata</span>
             <BaseButton :disabled="loading" @click="run">
               <i :class="['fa-solid', loading ? 'fa-circle-notch fa-spin' : 'fa-wand-magic-sparkles']"></i>
               {{ loading ? 'Lagi dicek…' : 'Cek tulisan' }}

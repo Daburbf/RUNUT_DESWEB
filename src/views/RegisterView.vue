@@ -1,6 +1,5 @@
 <script setup>
 import { reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import AuthCard from '../components/AuthCard.vue'
 import FormInput from '../components/FormInput.vue'
 import BaseButton from '../components/BaseButton.vue'
@@ -9,8 +8,7 @@ import { auth } from '../store/auth'
 const f = reactive({ name: '', email: '', password: '', confirm: '' })
 const err = reactive({})
 const ok = ref('')
-const router = useRouter()
-function submit() {
+async function submit() {
   Object.keys(err).forEach((k) => delete err[k])
   ok.value = ''
   if (f.name.trim().length < 2) err.name = 'Namanya kependekan, minimal 2 huruf.'
@@ -19,8 +17,9 @@ function submit() {
   if (f.password !== f.confirm) err.confirm = 'Konfirmasinya nggak sama, cek lagi.'
   if (Object.keys(err).length) return
   try {
-    auth.register({ name: f.name.trim(), email: f.email.trim(), password: f.password })
-    auth.login(f.email.trim(), f.password); ok.value = 'Akunnya jadi, langsung masuk ya.'; router.push('/analisis')
+    await auth.register({ name: f.name.trim(), email: f.email.trim(), password: f.password })
+    ok.value = 'Akunnya jadi.'
+    window.location.hash = '#/analisis'
   } catch (e) { err.email = e.message }
 }
 </script>
