@@ -9,4 +9,8 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig({
   plugins: [vue()],
   base: './',
+  // Profil browser/scratch di .tmp/ pernah bikin watcher mati (EBUSY) saat
+  // Edge memegang berkasnya. Diabaikan permanen; node_modules/.git ditulis
+  // eksplisit supaya tidak bergantung pada perilaku merge bawaan Vite.
+  server: { watch: { ignored: ['**/node_modules/**', '**/.git/**', '**/.tmp/**'] } },
 })

@@ -21,7 +21,7 @@ async function submit() {
   error.value = ''
   msg.value = ''
   if (password.value.length < 8) { error.value = 'Kata sandi baru minimal 8 karakter.'; return }
-  if (password.value !== confirm.value) { error.value = 'Konfirmasinya nggak sama.'; return }
+  if (password.value !== confirm.value) { error.value = 'Konfirmasi kata sandi tidak sama.'; return }
   busy.value = true
   try {
     const r = await api('/api/auth/reset-password', { method: 'POST', body: { token: token.value, password: password.value } })

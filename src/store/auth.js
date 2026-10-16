@@ -1,41 +1,43 @@
-// Store sesi — JWT + profil dari backend (menggantikan mock localStorage lama).
+// Store sesi — JWT access token di memori, refresh token di cookie HttpOnly
+// milik server. Tidak ada token yang disimpan di localStorage.
 import { reactive } from 'vue';
-import { api, tokens } from '../utils/api';
+import { api, session, restoreSession } from '../utils/api';
 
 export const auth = reactive({
   user: null,
   ready: false,
 
+  // Saat halaman dimuat ulang, access token sudah hilang; pulihkan sesi dari
+  // cookie refresh bila server masih mengenalinya.
   async init() {
-    if (tokens.access) {
-      try {
-        const { user } = await api('/api/auth/me');
-        this.user = user;
-      } catch {
-        tokens.clear();
-        this.user = null;
-      }
+    try {
+      await restoreSession();
+      const { user } = await api('/api/auth/me');
+      this.user = user;
+    } catch {
+      session.clear();
+      this.user = null;
     }
     this.ready = true;
   },
 
   async register({ name, email, password }) {
     const data = await api('/api/auth/register', { method: 'POST', body: { name, email, password } });
-    tokens.set(data);
+    session.set(data);
     this.user = data.user;
   },
 
   async login(email, password) {
     const data = await api('/api/auth/login', { method: 'POST', body: { email, password } });
-    tokens.set(data);
+    session.set(data);
     this.user = data.user;
   },
 
   async logout() {
     try {
-      await api('/api/auth/logout', { method: 'POST', body: { refreshToken: tokens.refresh } });
-    } catch { /* tetap keluar lokal */ }
-    tokens.clear();
+      await api('/api/auth/logout', { method: 'POST' });
+    } catch { /* sesi lokal tetap dibersihkan */ }
+    session.clear();
     this.user = null;
   },
 

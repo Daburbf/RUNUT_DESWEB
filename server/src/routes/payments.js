@@ -1,72 +1,161 @@
 import crypto from 'node:crypto';
 import { config } from '../config.js';
-import { query, withTransaction } from '../db.js';
+import { payments, users } from '../repositories/index.js';
 import { HttpError, asyncHandler } from '../middleware/errors.js';
 
-function snapBase() {
-  return config.midtrans.isProduction ? 'https://app.midtrans.com' : 'https://app.sandbox.midtrans.com';
-}
-function apiBase() {
-  return config.midtrans.isProduction ? 'https://api.midtrans.com' : 'https://api.sandbox.midtrans.com';
-}
+// Midtrans Core API (QRIS). Sandbox vs production hanya berbeda host.
+const apiBase = () => config.midtrans.apiBase
+  || (config.midtrans.isProduction ? 'https://api.midtrans.com' : 'https://api.sandbox.midtrans.com');
+const authHeader = () => `Basic ${Buffer.from(config.midtrans.serverKey + ':').toString('base64')}`;
 
 function requireMidtrans() {
   if (!config.midtrans.serverKey) {
-    throw new HttpError(503, 'Pembayaran belum dikonfigurasi (MIDTRANS_SERVER_KEY kosong). Lengkapi server/.env lalu coba lagi.', { code: 'MIDTRANS_NOT_CONFIGURED' });
+    throw new HttpError(503, 'Pembayaran belum dikonfigurasi (MIDTRANS_SERVER_KEY kosong).', { code: 'MIDTRANS_NOT_CONFIGURED' });
+  }
+  if (!config.premium.priceIdr) {
+    throw new HttpError(503, 'Tarif premium belum ditetapkan server. Isi PREMIUM_PRICE_IDR di server/.env — SRS/SDD tidak menetapkan harga, jadi tidak ada nilai bawaan.', { code: 'PRICE_NOT_CONFIGURED' });
   }
 }
 
-// POST /api/payments — buat transaksi Snap. Premium TIDAK aktif di sini;
-// hanya aktif setelah notifikasi terverifikasi (FR-07).
+// Ringkasan transaksi untuk klien. Tidak ada nilai yang bisa dipalsukan klien:
+// semua berasal dari konfigurasi server dan respons Midtrans.
+const toPublic = (p) => ({
+  id: p.id,
+  order_id: p.order_id,
+  amount: p.amount,
+  currency: p.currency,
+  status: p.status,
+  midtrans_status: p.midtrans_status || null,
+  expiry_time: p.expiry_time || null,
+  paid_at: p.paid_at,
+  created_at: p.created_at,
+  qr_available: Boolean(p.qr_url),
+  is_production: config.midtrans.isProduction,
+});
+
+async function midtransCall(path, init) {
+  let res;
+  try {
+    res = await fetch(`${apiBase()}${path}`, {
+      ...init,
+      headers: { 'Content-Type': 'application/json', Authorization: authHeader(), ...(init?.headers || {}) },
+    });
+  } catch (err) {
+    throw new HttpError(503, `Tidak dapat menghubungi Midtrans: ${err.message}`, { code: 'MIDTRANS_UNREACHABLE' });
+  }
+  const text = await res.text();
+  let body = null;
+  try { body = text ? JSON.parse(text) : null; } catch { body = null; }
+  if (!res.ok) {
+    throw new HttpError(502, `Midtrans menolak permintaan (HTTP ${res.status}). ${String(body?.status_message || text).slice(0, 200)}`, { code: 'MIDTRANS_FAILED' });
+  }
+  return body;
+}
+
+// transaction_status QRIS: pending | settlement | expire | deny (+ capture/cancel/failure).
+function outcomeOf(transaction_status, fraud_status) {
+  if (transaction_status === 'settlement' || (transaction_status === 'capture' && fraud_status !== 'challenge')) return 'success';
+  if (transaction_status === 'expire') return 'expired';
+  if (transaction_status === 'cancel') return 'cancelled';
+  if (['deny', 'failure'].includes(transaction_status)) return 'failed';
+  return 'pending';
+}
+
+// Menyimpan status terbaru dan memperpanjang premium HANYA pada transisi
+// pending -> success yang pertama: notifikasi/webhook berulang tidak
+// menggandakan masa premium.
+async function syncOutcome(payment, charge, transaction_status, fraud_status) {
+  const outcome = outcomeOf(transaction_status, fraud_status);
+  const wasPaid = payment.status === 'success';
+  const updated = await payments.update(payment.id, {
+    status: outcome,
+    midtrans_status: transaction_status || null,
+    transaction_id: charge?.transaction_id || payment.transaction_id || null,
+    expiry_time: charge?.expiry_time || payment.expiry_time || null,
+    paid_at: outcome === 'success' ? (payment.paid_at || new Date().toISOString()) : payment.paid_at,
+    settlement_time: charge?.settlement_time || payment.settlement_time || null,
+    raw_status: charge || payment.raw_status || null,
+  });
+  if (outcome === 'success' && !wasPaid) {
+    await users.extendPremium(payment.user_id, config.premium.durationDays);
+  }
+  return updated;
+}
+
+// POST /api/payments — buat transaksi QRIS. Premium TIDAK aktif di sini.
 export const createPayment = asyncHandler(async (req, res) => {
   requireMidtrans();
   const orderId = `RUNUT-${req.user.id.slice(0, 8)}-${Date.now()}`;
   const gross = config.premium.priceIdr;
-  const auth = Buffer.from(config.midtrans.serverKey + ':').toString('base64');
-  const snapRes = await fetch(`${apiBase()}/snap/v1/transactions`, {
+  const charge = await midtransCall('/v2/charge', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
     body: JSON.stringify({
+      payment_type: 'qris',
       transaction_details: { order_id: orderId, gross_amount: gross },
+      item_details: [{ id: `premium-${config.premium.durationDays}d`, price: gross, quantity: 1, name: `Runut Premium ${config.premium.durationDays} hari` }],
       customer_details: { first_name: req.user.name, email: req.user.email },
-      item_details: [{ id: 'premium-30d', price: gross, quantity: 1, name: `Runut Premium ${config.premium.durationDays} hari` }],
-      callbacks: { finish: `${config.frontendUrl}/#/premium` },
+      qris: { acquirer: config.midtrans.qrisAcquirer },
     }),
   });
-  if (!snapRes.ok) {
-    const body = await snapRes.text().catch(() => '');
-    throw new HttpError(502, `Midtrans menolak pembuatan transaksi (HTTP ${snapRes.status}).`, { code: 'MIDTRANS_CREATE_FAILED' });
-  }
-  const snap = await snapRes.json();
-  await query(
-    `INSERT INTO payments (user_id, order_id, amount, currency, status, snap_token, redirect_url)
-     VALUES ($1, $2, $3, 'IDR', 'pending', $4, $5)`,
-    [req.user.id, orderId, gross, snap.token || null, snap.redirect_url || null],
-  );
-  console.log(JSON.stringify({ event: 'payment_created', user: req.user.id, order: orderId, amount: gross }));
-  res.status(201).json({
+  const qrAction = (charge.actions || []).find((a) => a.name === 'generate-qr-code') || (charge.actions || [])[0] || null;
+  const row = await payments.create({
+    user_id: req.user.id,
     order_id: orderId,
     amount: gross,
-    currency: 'IDR',
-    snap_token: snap.token,
-    redirect_url: snap.redirect_url,
-    client_key: config.midtrans.clientKey || undefined,
-    snap_js: `${snapBase()}/snap/snap.js`,
-    is_production: config.midtrans.isProduction,
+    status: outcomeOf(charge.transaction_status, charge.fraud_status),
+    midtrans_status: charge.transaction_status || 'pending',
+    transaction_id: charge.transaction_id || null,
+    expiry_time: charge.expiry_time || null,
+    qr_url: qrAction?.url || null,
+    raw_status: charge,
   });
+  console.log(JSON.stringify({ event: 'payment_created', order: orderId, amount: gross, status: row.status }));
+  res.status(201).json({ payment: toPublic(row), reference: charge.transaction_id || null });
 });
 
-// GET /api/payments — audit transaksi milik sendiri.
 export const listPayments = asyncHandler(async (req, res) => {
-  const { rows } = await query(
-    'SELECT id, order_id, amount, currency, status, paid_at, created_at FROM payments WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50',
-    [req.user.id],
-  );
-  res.json({ payments: rows });
+  const list = await payments.listByUser(req.user.id);
+  res.json({ payments: list.map(toPublic) });
 });
 
-// POST /api/payments/notify — webhook Midtrans (TANPA auth user).
-// Verifikasi signature_key = SHA512(order_id + status_code + gross_amount + serverKey).
+async function ownPayment(userId, orderId) {
+  const payment = await payments.findByOrderId(orderId);
+  if (!payment) throw new HttpError(404, 'Transaksi tidak ditemukan.');
+  if (payment.user_id !== userId) throw new HttpError(403, 'Anda tidak berhak mengakses transaksi ini.');
+  return payment;
+}
+
+// GET /api/payments/:orderId/qr — meneruskan gambar QR dari Midtrans.
+// Gambar tidak dibuat sendiri: ini kode QR asli dari transaksi Midtrans.
+export const paymentQr = asyncHandler(async (req, res) => {
+  const payment = await ownPayment(req.user.id, req.params.orderId);
+  if (!payment.qr_url) throw new HttpError(404, 'Transaksi ini tidak memiliki kode QR.');
+  let upstream;
+  try {
+    upstream = await fetch(payment.qr_url, { headers: { Authorization: authHeader(), Accept: 'image/png' } });
+  } catch (err) {
+    throw new HttpError(503, `Tidak dapat mengambil kode QR dari Midtrans: ${err.message}`, { code: 'MIDTRANS_UNREACHABLE' });
+  }
+  if (!upstream.ok) {
+    throw new HttpError(502, `Midtrans tidak memberikan kode QR (HTTP ${upstream.status}).`, { code: 'QR_UNAVAILABLE' });
+  }
+  res.set('Content-Type', upstream.headers.get('content-type') || 'image/png');
+  res.set('Cache-Control', 'no-store');
+  res.send(Buffer.from(await upstream.arrayBuffer()));
+});
+
+// GET /api/payments/:orderId/status — tombol "Periksa status": tanya langsung
+// ke Midtrans, lalu sinkronkan penyimpanan sementara.
+export const paymentStatus = asyncHandler(async (req, res) => {
+  requireMidtrans();
+  const payment = await ownPayment(req.user.id, req.params.orderId);
+  const status = await midtransCall(`/v2/${encodeURIComponent(payment.order_id)}/status`, { method: 'GET' });
+  const updated = await syncOutcome(payment, status, status.transaction_status, status.fraud_status);
+  res.json({ payment: toPublic(updated) });
+});
+
+// POST /api/payments/notify — webhook Midtrans tanpa autentikasi pengguna.
+// signature_key = SHA512(order_id + status_code + gross_amount + serverKey).
 export const midtransNotify = asyncHandler(async (req, res) => {
   requireMidtrans();
   const n = req.body || {};
@@ -74,36 +163,24 @@ export const midtransNotify = asyncHandler(async (req, res) => {
   if (!order_id || !status_code || !gross_amount || !signature_key) {
     throw new HttpError(400, 'Payload notifikasi tidak lengkap.');
   }
-  const expect = crypto.createHash('sha512')
+  const expected = crypto.createHash('sha512')
     .update(`${order_id}${status_code}${gross_amount}${config.midtrans.serverKey}`)
     .digest('hex');
-  if (expect !== String(signature_key).toLowerCase()) {
+  if (expected !== String(signature_key).toLowerCase()) {
     console.warn(JSON.stringify({ event: 'payment_bad_signature', order: order_id }));
-    throw new HttpError(403, 'Signature notifikasi tidak valid.');
+    throw new HttpError(403, 'Signature notifikasi tidak valid.', { code: 'BAD_SIGNATURE' });
   }
-  const { rows } = await query('SELECT * FROM payments WHERE order_id = $1', [order_id]);
-  const payment = rows[0];
+  const payment = await payments.findByOrderId(order_id);
   if (!payment) {
     console.warn(JSON.stringify({ event: 'payment_unknown_order', order: order_id }));
     return res.json({ ok: true });
   }
-  const success = (transaction_status === 'capture' && fraud_status === 'accept')
-    || transaction_status === 'settlement';
-  const failed = ['deny', 'cancel', 'expire', 'failure'].includes(transaction_status);
-  await withTransaction(async (client) => {
-    await client.query('UPDATE payments SET status = $1, raw_notify = $2, paid_at = CASE WHEN $1 IN (\'settlement\',\'capture\',\'paid\') THEN coalesce(paid_at, now()) ELSE paid_at END, updated_at = now() WHERE id = $3',
-      [transaction_status, JSON.stringify(n), payment.id]);
-    // Aktivasi premium HANYA setelah pembayaran terverifikasi sukses — jangan
-    // pernah percaya status premium dari browser (NFR/FR-07).
-    if (success && payment.status !== 'settlement' && payment.status !== 'paid' && payment.status !== 'capture') {
-      await client.query(
-        `UPDATE users SET is_premium = TRUE,
-          premium_until = GREATEST(coalesce(premium_until, now()), now()) + ($1 || ' days')::interval,
-          updated_at = now() WHERE id = $2`,
-        [String(config.premium.durationDays), payment.user_id],
-      );
-    }
-  });
-  console.log(JSON.stringify({ event: 'payment_notify', order: order_id, status: transaction_status, success, failed }));
+  // Jumlah yang dibayar harus sama dengan yang ditagih.
+  if (Number(gross_amount) !== Number(payment.amount)) {
+    console.warn(JSON.stringify({ event: 'payment_amount_mismatch', order: order_id }));
+    throw new HttpError(400, 'Jumlah pembayaran tidak cocok dengan transaksi.', { code: 'AMOUNT_MISMATCH' });
+  }
+  const updated = await syncOutcome(payment, n, transaction_status, fraud_status);
+  console.log(JSON.stringify({ event: 'payment_notify', order: order_id, status: transaction_status, outcome: updated.status }));
   res.json({ ok: true });
 });

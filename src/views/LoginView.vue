@@ -8,7 +8,7 @@ import { auth } from '../store/auth'
 const email = ref(''), password = ref(''), error = ref('')
 async function submit() {
   error.value = ''
-  if (!email.value || !password.value) { error.value = 'Email sama kata sandinya diisi dulu.'; return }
+  if (!email.value || !password.value) { error.value = 'Isi email dan kata sandi terlebih dahulu.'; return }
   try {
     await auth.login(email.value.trim(), password.value)
   } catch (e) { error.value = e.message; return }

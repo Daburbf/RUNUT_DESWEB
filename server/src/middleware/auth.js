@@ -1,7 +1,9 @@
 import jwt from 'jsonwebtoken';
 import { config } from '../config.js';
-import { query } from '../db.js';
+import { users } from '../repositories/index.js';
 import { HttpError } from './errors.js';
+
+export const REFRESH_COOKIE = 'runut_rt';
 
 export function signAccessToken(user) {
   return jwt.sign(
@@ -9,6 +11,27 @@ export function signAccessToken(user) {
     config.jwt.accessSecret,
     { expiresIn: config.jwt.accessTtl },
   );
+}
+
+// Refresh token disimpan di cookie HttpOnly, bukan di localStorage, sehingga
+// JavaScript halaman tidak dapat membacanya (SRS: jangan simpan refresh token
+// mentah di penyimpanan klien yang dapat dibaca skrip).
+export function setRefreshCookie(res, token) {
+  res.cookie(REFRESH_COOKIE, token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: config.env === 'production',
+    path: '/api/auth',
+    maxAge: config.jwt.refreshDays * 24 * 3600 * 1000,
+  });
+}
+
+export function clearRefreshCookie(res) {
+  res.clearCookie(REFRESH_COOKIE, { path: '/api/auth' });
+}
+
+export function readRefreshToken(req) {
+  return (req.cookies && req.cookies[REFRESH_COOKIE]) || null;
 }
 
 export async function requireAuth(req, _res, next) {
@@ -22,15 +45,14 @@ export async function requireAuth(req, _res, next) {
     } catch {
       throw new HttpError(401, 'Sesi kedaluwarsa atau tidak valid. Silakan masuk kembali.', { code: 'INVALID_TOKEN' });
     }
-    const { rows } = await query('SELECT id, name, email, is_premium, premium_until FROM users WHERE id = $1', [payload.sub]);
-    if (rows.length === 0) throw new HttpError(401, 'Akun tidak ditemukan.', { code: 'NO_USER' });
-    const u = rows[0];
-    // Premium kedaluwarsa: turunkan status secara malas (lazy) saat dibaca.
-    if (u.is_premium && u.premium_until && new Date(u.premium_until) < new Date()) {
-      await query('UPDATE users SET is_premium = FALSE WHERE id = $1', [u.id]);
-      u.is_premium = false;
+    const user = await users.findById(payload.sub);
+    if (!user) throw new HttpError(401, 'Akun tidak ditemukan.', { code: 'NO_USER' });
+    // Premium kedaluwarsa diturunkan saat dibaca.
+    if (user.is_premium && user.premium_until && new Date(user.premium_until) < new Date()) {
+      await users.update(user.id, { is_premium: false });
+      user.is_premium = false;
     }
-    req.user = u;
+    req.user = user;
     next();
   } catch (err) {
     next(err);

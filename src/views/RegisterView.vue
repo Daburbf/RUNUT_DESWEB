@@ -11,20 +11,20 @@ const ok = ref('')
 async function submit() {
   Object.keys(err).forEach((k) => delete err[k])
   ok.value = ''
-  if (f.name.trim().length < 2) err.name = 'Namanya kependekan, minimal 2 huruf.'
-  if (!/^\S+@\S+\.\S+$/.test(f.email)) err.email = 'Emailnya kayaknya salah ketik deh.'
-  if (f.password.length < 8) err.password = 'Kata sandinya minimal 8 karakter ya.'
-  if (f.password !== f.confirm) err.confirm = 'Konfirmasinya nggak sama, cek lagi.'
+  if (f.name.trim().length < 2) err.name = 'Nama minimal 2 karakter.'
+  if (!/^\S+@\S+\.\S+$/.test(f.email)) err.email = 'Format email tidak valid. Periksa kembali penulisannya.'
+  if (f.password.length < 8) err.password = 'Kata sandi minimal 8 karakter.'
+  if (f.password !== f.confirm) err.confirm = 'Konfirmasi kata sandi tidak sama.'
   if (Object.keys(err).length) return
   try {
     await auth.register({ name: f.name.trim(), email: f.email.trim(), password: f.password })
-    ok.value = 'Akunnya jadi.'
+    ok.value = 'Akun berhasil dibuat.'
     window.location.hash = '#/analisis'
   } catch (e) { err.email = e.message }
 }
 </script>
 <template>
-  <AuthCard title="Bikin akun" subtitle="Gratis, nggak sampai semenit.">
+  <AuthCard title="Buat akun" subtitle="Gratis dan hanya butuh satu menit.">
     <form class="space-y-4" @submit.prevent="submit">
       <FormInput v-model="f.name" label="Nama" icon="fa-user" :error="err.name" />
       <FormInput v-model="f.email" label="Email" type="email" icon="fa-envelope" :error="err.email" />

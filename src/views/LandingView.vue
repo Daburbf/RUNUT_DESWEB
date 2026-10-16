@@ -38,7 +38,7 @@ const keys = Object.keys(CATEGORIES)
             <BaseButton to="/tentang" variant="secondary" size="lg">Tentang aplikasi</BaseButton>
           </div>
           <div class="mt-10 flex flex-wrap gap-6 border-t-2 border-black pt-6">
-            <p class="font-mono text-xs uppercase tracking-widest"><span class="text-2xl font-black">6</span><br />Kategori dicek</p>
+            <p class="font-mono text-xs uppercase tracking-widest"><span class="text-2xl font-black">6</span><br />Kategori diperiksa</p>
             <p class="font-mono text-xs uppercase tracking-widest"><span class="text-2xl font-black">500</span><br />Kata gratis</p>
             <p class="font-mono text-xs uppercase tracking-widest"><span class="text-2xl font-black">ID</span><br />Bhs. Indonesia</p>
           </div>
@@ -51,7 +51,7 @@ const keys = Object.keys(CATEGORIES)
     </section>
 
     <section class="mx-auto max-w-6xl px-4 py-16 sm:px-6 md:py-24">
-      <SectionLabel>02 / Yang dicek — Enam hal</SectionLabel>
+      <SectionLabel>02 / Yang diperiksa — Enam hal</SectionLabel>
       <div class="mt-6 grid gap-8 md:grid-cols-[5fr_7fr] md:items-end">
         <h2 class="text-4xl font-black uppercase leading-[0.95] tracking-tighter md:text-6xl">Bukan cek typo. Cek kebiasaan.</h2>
         <p class="text-black/70 md:pb-1">Enam kategori analisis sesuai rancangan: pengulangan kata, pola kalimat, struktur seragam, transisi, formalitas, dan konsistensi gaya.</p>
@@ -83,7 +83,7 @@ const keys = Object.keys(CATEGORIES)
     <section class="mx-auto max-w-6xl px-4 py-16 sm:px-6 md:py-24">
       <div class="border-4 border-black bg-black p-8 text-white md:p-16">
         <SectionLabel>04 / Mulai</SectionLabel>
-        <h2 class="mt-6 max-w-3xl text-4xl font-black uppercase leading-[0.95] tracking-tighter md:text-7xl">Udah, langsung coba aja.</h2>
+        <h2 class="mt-6 max-w-3xl text-4xl font-black uppercase leading-[0.95] tracking-tighter md:text-7xl">Sudah siap? Langsung mulai.</h2>
         <p class="mt-4 max-w-xl text-white/60">Daftar dulu, gratis. Akun gratis bisa menganalisis sampai 500 kata; butuh lebih? Ada Premium via Midtrans.</p>
         <div class="mt-8 flex flex-col gap-3 sm:flex-row">
           <BaseButton :to="auth.user ? '/analisis' : '/daftar'" variant="accent" size="lg">Mulai nulis</BaseButton>

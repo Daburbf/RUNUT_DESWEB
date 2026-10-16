@@ -1,83 +1,80 @@
-import { query, withTransaction } from '../db.js';
+import { documents, analyses, issues as issuesRepo } from '../repositories/index.js';
 import { HttpError, asyncHandler } from '../middleware/errors.js';
 import { countWords } from '../services/stats.js';
 
+const DECISIONS = new Set(['active', 'applied', 'rejected']);
+
 async function ownDocument(userId, id) {
-  const { rows } = await query('SELECT * FROM documents WHERE id = $1', [id]);
-  const doc = rows[0];
+  const doc = await documents.findById(id);
   if (!doc) throw new HttpError(404, 'Dokumen tidak ditemukan.');
   if (doc.user_id !== userId) throw new HttpError(403, 'Anda tidak berhak mengakses dokumen ini.');
   return doc;
 }
 
-async function latestAnalysis(documentId) {
-  const { rows } = await query(
-    'SELECT * FROM analysis_results WHERE document_id = $1 ORDER BY created_at DESC LIMIT 1',
-    [documentId],
-  );
-  return rows[0] || null;
+const latestAnalysis = (documentId) => analyses.findLatestByDocument(documentId);
+
+// Kutipan harus masih cocok dengan teks pada posisi tersimpan; kalau teks sudah
+// berubah, saran itu dibatalkan (pengguna diminta menganalisis ulang).
+function assertStillValid(text, issue) {
+  const slice = text.slice(issue.start_pos, issue.end_pos);
+  if (slice !== issue.snippet) {
+    throw new HttpError(409, `Saran "${issue.snippet}" tidak lagi cocok dengan teks pada posisinya. Jalankan analisis ulang sebelum menerapkan saran.`, { code: 'STALE_POSITION', issue_id: issue.id });
+  }
 }
 
-async function issuesOf(analysisId) {
-  const { rows } = await query('SELECT * FROM issues WHERE analysis_id = $1 ORDER BY start_pos ASC', [analysisId]);
-  return rows.map((r) => ({
-    id: r.id, category: r.category, start_pos: r.start_pos, end_pos: r.end_pos,
-    snippet: r.snippet, explanation: r.explanation, suggestion: r.suggestion,
-    needs_manual_review: r.needs_manual_review, decision: r.decision,
-  }));
-}
-
-function applyDecisions(original, issues) {
-  const accepted = issues
-    .filter((i) => i.decision === 'accepted' && !i.needs_manual_review)
+function buildRevised(original, issues) {
+  const applied = issues
+    .filter((i) => i.decision === 'applied')
     .sort((a, b) => a.start_pos - b.start_pos);
   let out = '';
   let pos = 0;
-  for (const it of accepted) {
-    if (it.start_pos < pos) continue; // lewati yang tumpang tindih
+  for (const it of applied) {
+    if (it.start_pos < pos) continue; // tumpang tindih: saran berikutnya dilewati
     out += original.slice(pos, it.start_pos) + it.suggestion;
     pos = it.end_pos;
   }
   return out + original.slice(pos);
 }
 
-// GET /api/documents — riwayat milik sendiri (pencarian judul sederhana).
 export const listDocuments = asyncHandler(async (req, res) => {
-  const q = String(req.query.q || '').trim();
-  const { rows } = await query(
-    `SELECT d.id, d.title, d.status, d.word_count, d.updated_at, d.created_at, d.expires_at,
-            (SELECT count(*)::int FROM issues i JOIN analysis_results ar ON ar.id = i.analysis_id
-              WHERE ar.document_id = d.id AND i.decision = 'pending') AS pending_count
-     FROM documents d WHERE d.user_id = $1 ${q ? 'AND d.title ILIKE $2' : ''}
-     ORDER BY d.updated_at DESC LIMIT 100`,
-    q ? [req.user.id, `%${q}%`] : [req.user.id],
-  );
-  res.json({ documents: rows });
+  const list = await documents.listByUser(req.user.id, { q: String(req.query.q || ''), limit: 100 });
+  const withCounts = await Promise.all(list.map(async (d) => ({
+    id: d.id, title: d.title, status: d.status, word_count: d.word_count,
+    created_at: d.created_at, updated_at: d.updated_at, expires_at: d.expires_at,
+    pending_count: await issuesRepo.countPendingByDocument(d.id),
+  })));
+  res.json({ documents: withCounts });
 });
 
-// GET /api/documents/:id — buka dokumen milik sendiri + analisis terbaru.
 export const getDocument = asyncHandler(async (req, res) => {
   const doc = await ownDocument(req.user.id, req.params.id);
   const analysis = await latestAnalysis(doc.id);
-  const issues = analysis ? await issuesOf(analysis.id) : [];
+  const issues = analysis ? await issuesRepo.listByAnalysis(analysis.id) : [];
   res.json({
     document: {
-      id: doc.id, title: doc.title, original_text: doc.original_text,
-      revised_text: doc.revised_text || applyDecisions(doc.original_text, issues),
+      id: doc.id, title: doc.title,
+      original_text: doc.original_text,
+      revised_text: buildRevised(doc.original_text, issues),
       status: doc.status, word_count: doc.word_count,
       created_at: doc.created_at, updated_at: doc.updated_at, expires_at: doc.expires_at,
     },
     analysis: analysis ? {
       id: analysis.id, stats: analysis.stats, locked: analysis.locked,
-      signals: analysis.stats?.signals || null,
       ai: { provider: analysis.ai_provider, model: analysis.ai_model, latencyMs: analysis.ai_latency_ms, status: analysis.ai_status },
     } : null,
     issues,
+    meta: {
+      is_premium: req.user.is_premium,
+      total_found: issues.length,
+      shown: req.user.is_premium ? issues.length : Math.min(issues.length, 3),
+      locked_note: req.user.is_premium ? null : 'Akun gratis menampilkan maksimal 3 masalah. Saran perbaikan terbuka di Premium.',
+    },
   });
 });
 
-// PATCH /api/documents/:id/issues — terapkan/tolak saran per bagian atau sekaligus.
-// Body: { decisions: [{ id, decision: 'accepted'|'rejected', suggestion? }] | { acceptAll: true } }
+// PATCH /api/documents/:id/issues
+// Body: { decisions: [{ id, decision: 'active'|'applied'|'rejected', suggestion?, confirm_manual? }] }
+//   atau { accept_all: true } untuk menerapkan semua saran yang valid.
 export const decideIssues = asyncHandler(async (req, res) => {
   const doc = await ownDocument(req.user.id, req.params.id);
   const analysis = await latestAnalysis(doc.id);
@@ -85,86 +82,85 @@ export const decideIssues = asyncHandler(async (req, res) => {
   if (analysis.locked && !req.user.is_premium) {
     throw new HttpError(403, 'Saran perbaikan terkunci untuk akun gratis. Tingkatkan ke Premium untuk menerapkan saran.', { code: 'LOCKED' });
   }
-  const issues = await issuesOf(analysis.id);
+  const issues = await issuesRepo.listByAnalysis(analysis.id);
   const byId = new Map(issues.map((i) => [i.id, i]));
-  let targets = [];
-  if (req.body?.acceptAll) {
-    targets = issues.filter((i) => i.decision === 'pending' && !i.needs_manual_review);
+
+  let targets;
+  if (req.body?.accept_all) {
+    // Hanya saran yang masih aktif dan tidak perlu cek manual yang diterapkan
+    // sekaligus; saran yang bertumpuk dilewati saat penyusunan teks.
+    targets = issues
+      .filter((i) => i.decision === 'active' && !i.needs_manual_review)
+      .map((i) => ({ id: i.id, decision: 'applied', suggestion: i.suggestion }));
+    for (const t of targets) assertStillValid(doc.original_text, byId.get(t.id));
   } else if (Array.isArray(req.body?.decisions)) {
+    targets = [];
     for (const d of req.body.decisions) {
-      const it = byId.get(d.id);
-      if (!it) throw new HttpError(404, `Saran ${d.id} tidak ditemukan pada dokumen ini.`);
-      if (!['accepted', 'rejected'].includes(d.decision)) throw new HttpError(400, 'decision harus "accepted" atau "rejected".');
-      if (d.decision === 'accepted' && it.needs_manual_review && !d.confirmManual) {
-        throw new HttpError(409, 'Saran ini ditandai perlu cek manual. Tinjau maknanya dulu, lalu kirim ulang dengan confirmManual: true.', { code: 'NEEDS_MANUAL' });
+      const issue = byId.get(d.id);
+      if (!issue) throw new HttpError(404, `Saran ${d.id} tidak ditemukan pada dokumen ini.`);
+      if (!DECISIONS.has(d.decision)) throw new HttpError(400, 'decision harus "active", "applied", atau "rejected".');
+      if (d.decision === 'applied') {
+        assertStillValid(doc.original_text, issue);
+        if (issue.needs_manual_review && !d.confirm_manual) {
+          throw new HttpError(409, 'Saran ini ditandai perlu cek manual. Tinjau maknanya dulu, lalu kirim ulang dengan confirm_manual: true.', { code: 'NEEDS_MANUAL', issue_id: issue.id });
+        }
       }
-      targets.push({ ...it, decision: d.decision, suggestion: typeof d.suggestion === 'string' && d.suggestion.trim() ? d.suggestion.trim().slice(0, 2000) : it.suggestion });
+      targets.push({
+        id: issue.id,
+        decision: d.decision,
+        suggestion: typeof d.suggestion === 'string' && d.suggestion.trim() ? d.suggestion.trim().slice(0, 2000) : issue.suggestion,
+      });
     }
   } else {
-    throw new HttpError(400, 'Kirim "decisions" atau "acceptAll: true".');
+    throw new HttpError(400, 'Kirim "decisions" atau "accept_all: true".');
   }
 
-  await withTransaction(async (client) => {
-    for (const t of targets) {
-      await client.query('UPDATE issues SET decision = $1, suggestion = $2 WHERE id = $3', [t.decision, t.suggestion, t.id]);
-    }
-    const merged = issues.map((i) => {
-      const t = targets.find((x) => x.id === i.id);
-      return t || i;
-    });
-    const revised = applyDecisions(doc.original_text, merged);
-    await client.query("UPDATE documents SET revised_text = $1, status = 'revising', updated_at = now() WHERE id = $2", [revised, doc.id]);
-  });
-  const fresh = await issuesOf(analysis.id);
-  const { rows } = await query('SELECT revised_text FROM documents WHERE id = $1', [doc.id]);
-  res.json({ ok: true, issues: fresh, revised_text: rows[0].revised_text });
+  for (const t of targets) await issuesRepo.updateDecision(t.id, { decision: t.decision, suggestion: t.suggestion });
+  const fresh = await issuesRepo.listByAnalysis(analysis.id);
+  const revised = buildRevised(doc.original_text, fresh);
+  await documents.update(doc.id, { revised_text: revised, status: 'revising' });
+  res.json({ ok: true, issues: fresh, revised_text: revised, document: { id: doc.id, status: 'revising' } });
 });
 
-// POST /api/documents/:id/restore — pulihkan teks asli (reset semua keputusan + revisi).
+// POST /api/documents/:id/restore — kembali ke teks asli.
 export const restoreOriginal = asyncHandler(async (req, res) => {
   const doc = await ownDocument(req.user.id, req.params.id);
   const analysis = await latestAnalysis(doc.id);
-  await withTransaction(async (client) => {
-    if (analysis) await client.query("UPDATE issues SET decision = 'pending' WHERE analysis_id = $1", [analysis.id]);
-    await client.query("UPDATE documents SET revised_text = NULL, status = 'analyzed', updated_at = now() WHERE id = $1", [doc.id]);
-  });
-  res.json({ ok: true, revised_text: doc.original_text });
+  if (analysis) await issuesRepo.resetDecisions(analysis.id);
+  await documents.update(doc.id, { revised_text: null, status: 'analyzed' });
+  res.json({ ok: true, revised_text: doc.original_text, issues: analysis ? await issuesRepo.listByAnalysis(analysis.id) : [] });
 });
 
-// PATCH /api/documents/:id/title
 export const renameDocument = asyncHandler(async (req, res) => {
   const doc = await ownDocument(req.user.id, req.params.id);
   const title = String(req.body?.title || '').trim().slice(0, 255);
   if (!title) throw new HttpError(400, 'Judul tidak boleh kosong.');
-  await query('UPDATE documents SET title = $1, updated_at = now() WHERE id = $2', [title, doc.id]);
+  await documents.update(doc.id, { title });
   res.json({ ok: true, title });
 });
 
-// DELETE /api/documents — hapus satu/beberapa riwayat setelah konfirmasi frontend.
-// Body: { ids: [uuid...] }
+// DELETE /api/documents — hapus satu atau beberapa dokumen setelah konfirmasi.
 export const deleteDocuments = asyncHandler(async (req, res) => {
   const ids = req.body?.ids;
   if (!Array.isArray(ids) || ids.length === 0 || ids.length > 50) {
     throw new HttpError(400, 'Kirim "ids" berisi 1–50 id dokumen.');
   }
-  const placeholders = ids.map((_, i) => `$${i + 2}`).join(', ');
-  const { rows } = await query(`SELECT id FROM documents WHERE user_id = $1 AND id IN (${placeholders})`, [req.user.id, ...ids]);
-  if (rows.length === 0) throw new HttpError(404, 'Tidak ada dokumen milik Anda pada daftar itu.');
-  await query(`DELETE FROM documents WHERE user_id = $1 AND id IN (${placeholders})`, [req.user.id, ...ids]);
-  res.json({ ok: true, deleted: rows.map((r) => r.id) });
+  const deleted = await documents.deleteMany(req.user.id, ids);
+  if (deleted.length === 0) throw new HttpError(404, 'Tidak ada dokumen milik Anda pada daftar itu.');
+  res.json({ ok: true, deleted });
 });
 
-// GET /api/documents/:id/download?format=txt|docx — unduh revisi milik sendiri.
+// GET /api/documents/:id/download?format=txt|docx — teks revisi pilihan pengguna.
 export const downloadDocument = asyncHandler(async (req, res) => {
   const doc = await ownDocument(req.user.id, req.params.id);
   const analysis = await latestAnalysis(doc.id);
-  const issues = analysis ? await issuesOf(analysis.id) : [];
-  const text = doc.revised_text || applyDecisions(doc.original_text, issues) || doc.original_text;
+  const issues = analysis ? await issuesRepo.listByAnalysis(analysis.id) : [];
+  const text = doc.revised_text ?? buildRevised(doc.original_text, issues) ?? doc.original_text;
   const safe = (doc.title || 'runut').replace(/[^\p{L}\p{N}\- ]+/gu, '').trim().slice(0, 80) || 'runut';
   const format = String(req.query.format || 'txt').toLowerCase();
+
   if (format === 'docx') {
     const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import('docx');
-    const paragraphs = String(text).split('\n').map((line) => new Paragraph({ children: [new TextRun(line || ' ')] }));
     const file = new Document({
       creator: 'Runut',
       title: doc.title,
@@ -172,15 +168,17 @@ export const downloadDocument = asyncHandler(async (req, res) => {
         children: [
           new Paragraph({ text: doc.title || 'Hasil revisi Runut', heading: HeadingLevel.HEADING_1 }),
           new Paragraph({ children: [new TextRun({ text: `Direvisi dengan Runut · ${countWords(text)} kata`, color: '666666', size: 20 })] }),
-          ...paragraphs,
+          ...String(text).split('\n').map((line) => new Paragraph({ children: [new TextRun(line || ' ')] })),
         ],
       }],
     });
-    const buf = await Packer.toBuffer(file);
+    const buf = await Packer.toBuffer(file).catch(() => null);
+    if (!buf) throw new HttpError(500, 'Konversi DOCX gagal. Coba unduh dalam format TXT.');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     res.setHeader('Content-Disposition', `attachment; filename="${safe}-revisi.docx"`);
     return res.send(buf);
   }
+  if (format !== 'txt') throw new HttpError(400, 'Format unduhan hanya "txt" atau "docx".');
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${safe}-revisi.txt"`);
   res.send(text);

@@ -45,7 +45,7 @@ function logout() {
       <div class="w-full max-w-md border-4 border-black bg-white p-6">
         <p class="font-black uppercase tracking-tight">Yakin mau keluar?</p>
         <div class="mt-6 flex justify-end gap-2">
-          <BaseButton variant="secondary" size="sm" @click="show = false">Gajadi</BaseButton>
+          <BaseButton variant="secondary" size="sm" @click="show = false">Batal</BaseButton>
           <BaseButton variant="accent" size="sm" @click="logout">Keluar</BaseButton>
         </div>
       </div>

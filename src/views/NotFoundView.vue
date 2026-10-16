@@ -7,8 +7,8 @@ import BaseButton from '../components/BaseButton.vue'
       <div class="p-8 md:p-16">
         <p class="font-mono text-xs uppercase tracking-widest text-[#FF3000]">Nyasar / 404</p>
         <p class="mt-4 text-8xl font-black tracking-tighter md:text-[10rem] md:leading-none">404</p>
-        <h1 class="mt-4 text-2xl font-black uppercase tracking-tight">Salah alamat nih.</h1>
-        <p class="mt-2 text-black/60">Halamannya nggak ada. Balik aja ke jalan yang bener.</p>
+        <h1 class="mt-4 text-2xl font-black uppercase tracking-tight">Alamat tidak ditemukan.</h1>
+        <p class="mt-2 text-black/60">Halaman ini tidak ada. Kembali ke beranda untuk melanjutkan.</p>
         <BaseButton to="/" class="mt-8">Balik ke beranda</BaseButton>
       </div>
       <div class="swiss-grid-pattern relative flex min-h-[280px] items-center justify-center border-t-4 border-black bg-[#F2F2F2] md:border-l-4 md:border-t-0" aria-hidden="true">

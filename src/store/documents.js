@@ -1,6 +1,6 @@
 // Akses dokumen via backend. Draf analisis aktif tetap di sessionStorage agar
 // refresh di halaman hasil tidak menghilangkan konteks.
-import { api, apiBase, tokens } from '../utils/api';
+import { api, apiBase, session } from '../utils/api';
 
 const DRAFT_KEY = 'runut_current_v2';
 
@@ -25,7 +25,8 @@ export const documents = {
   // Unduh via fetch berautentikasi (token di header, bukan query) lalu blob.
   async download(id, format, filename) {
     const res = await fetch(`${apiBase}/api/documents/${id}/download?format=${format}`, {
-      headers: { Authorization: `Bearer ${tokens.access || ''}` },
+      headers: { Authorization: `Bearer ${session.access || ''}` },
+      credentials: 'include',
     });
     if (!res.ok) throw new Error('Unduhan gagal. Coba lagi.');
     const blob = await res.blob();

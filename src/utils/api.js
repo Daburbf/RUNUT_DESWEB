@@ -1,26 +1,20 @@
 // Klien HTTP terpusat untuk backend Runut (VITE_API_URL, default :3000).
-// Menyertakan access token, me-refresh otomatis sekali saat 401, lalu mengulang
-// permintaan. TIDAK PERNAH menyimpan API key AI — semua rahasia milik server.
+// Access token disimpan di memori saja. Refresh token berada di cookie
+// HttpOnly milik server sehingga tidak bisa dibaca skrip halaman. Tidak ada
+// kredensial AI di sisi klien — semua rahasia milik server.
 const BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3000').replace(/\/$/, '');
 
-const ACCESS_KEY = 'runut_access';
-const REFRESH_KEY = 'runut_refresh';
+let accessToken = null;
 
-export const tokens = {
+export const session = {
   get access() {
-    try { return localStorage.getItem(ACCESS_KEY); } catch { return null; }
+    return accessToken;
   },
-  get refresh() {
-    try { return localStorage.getItem(REFRESH_KEY); } catch { return null; }
-  },
-  set(pair) {
-    try {
-      if (pair?.accessToken) localStorage.setItem(ACCESS_KEY, pair.accessToken);
-      if (pair?.refreshToken) localStorage.setItem(REFRESH_KEY, pair.refreshToken);
-    } catch { /* abaikan */ }
+  set({ accessToken: token } = {}) {
+    accessToken = token || null;
   },
   clear() {
-    try { localStorage.removeItem(ACCESS_KEY); localStorage.removeItem(REFRESH_KEY); } catch { /* abaikan */ }
+    accessToken = null;
   },
 };
 
@@ -42,27 +36,53 @@ async function raw(path, { method = 'GET', body, form, token } = {}) {
     headers['Content-Type'] = 'application/json';
     payload = JSON.stringify(body);
   }
-  const res = await fetch(BASE + path, { method, headers, body: payload });
+  let res;
+  try {
+    res = await fetch(BASE + path, { method, headers, body: payload, credentials: 'include' });
+  } catch {
+    // Kegagalan jaringan: jangan teruskan pesan bawaan browser (mis. "Failed to fetch").
+    throw new ApiError(0, { error: 'Tidak bisa menghubungi server. Periksa koneksi lalu coba lagi.' });
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(res.status, data);
   return data;
 }
 
+// Refresh token dirotasi server: satu token hanya sah sekali. Bila beberapa
+// permintaan kena 401 bersamaan, semuanya harus menunggu SATU refresh yang sama
+// — kalau tidak, yang kalah balapan menerima 401 dan sesi ikut dibersihkan.
+let refreshing = null;
+
+export function refreshPair() {
+  refreshing ??= raw('/api/auth/refresh', { method: 'POST' }).finally(() => {
+    refreshing = null;
+  });
+  return refreshing;
+}
+
 export async function api(path, opts = {}, retry = true) {
   try {
-    return await raw(path, { ...opts, token: tokens.access });
+    return await raw(path, { ...opts, token: accessToken });
   } catch (err) {
-    if (err instanceof ApiError && err.status === 401 && retry && tokens.refresh && !path.startsWith('/api/auth/')) {
+    // Sekali saja: coba segarkan sesi lewat cookie, lalu ulangi permintaan.
+    if (err instanceof ApiError && err.status === 401 && retry && !path.startsWith('/api/auth/')) {
       try {
-        const pair = await raw('/api/auth/refresh', { method: 'POST', body: { refreshToken: tokens.refresh } });
-        tokens.set(pair);
-        return await raw(path, { ...opts, token: tokens.access });
+        session.set(await refreshPair());
+        return await raw(path, { ...opts, token: accessToken });
       } catch {
-        tokens.clear();
+        session.clear();
       }
     }
     throw err;
   }
+}
+
+// Dipakai saat halaman dimuat ulang: access token hilang karena hanya di
+// memori, jadi sesi dipulihkan dari cookie refresh bila masih berlaku.
+export async function restoreSession() {
+  const pair = await refreshPair();
+  session.set(pair);
+  return pair;
 }
 
 export const apiBase = BASE;

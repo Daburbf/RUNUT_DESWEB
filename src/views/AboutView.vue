@@ -27,7 +27,7 @@ const plans = [
 ]
 
 const faqs = [
-  { q: 'Apakah Runut mendeteksi tulisan AI atau plagiarisme?', a: 'Tidak. Runut hanya memeriksa pola tulisan (pengulangan, struktur kalimat, transisi, formalitas, konsistensi gaya). Tidak ada klaim asal-usul teks dan tidak ada pemeriksaan orisinalitas.' },
+  { q: 'Apakah Runut mendeteksi tulisan AI atau plagiarisme?', a: 'Runut menampilkan dua angka yang dihitung server dari teksmu, bukan keluaran model AI: Similarity (tingkat kesamaan pola di dalam teks — pengulangan kata isi, frasa, dan pembuka kalimat) dan Penggunaan AI (keseragaman panjang kalimat, pengulangan frasa, jumlah kalimat pendek).' },
   { q: 'Apakah saran diterapkan otomatis?', a: 'Tidak. Semua keputusan ada di tangan kamu — terima, tolak, atau pulihkan teks asli. Saran yang berisiko mengubah makna ditandai "perlu cek manual".' },
   { q: 'Berapa lama dokumen tersimpan?', a: '30 hari setelah analisis terakhir, atau sampai kamu menghapusnya dari riwayat. Setelah itu dihapus permanen.' },
   { q: 'Apakah teks saya dibagikan ke pihak lain?', a: 'Tidak. Teks hanya dikirim ke provider AI yang dikonfigurasi server untuk keperluan analisis, dan tidak dipakai untuk hal lain.' },

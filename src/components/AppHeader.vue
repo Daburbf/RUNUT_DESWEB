@@ -18,7 +18,6 @@ function logout() {
       <router-link to="/" class="flex items-center gap-2.5">
         <span class="flex h-8 w-8 items-center justify-center bg-black font-mono text-sm font-black text-white">R</span>
         <span class="text-lg font-black uppercase tracking-tighter">Runut</span>
-        <span class="hidden bg-black px-1.5 py-0.5 font-mono text-[10px] tracking-widest text-white sm:inline">V.2.0</span>
       </router-link>
 
       <ul class="hidden items-center gap-7 md:flex">

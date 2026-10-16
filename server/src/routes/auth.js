@@ -1,22 +1,37 @@
 ﻿import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { config } from '../config.js';
-import { query, withTransaction } from '../db.js';
+import { users, refreshTokens } from '../repositories/index.js';
 import { HttpError, asyncHandler } from '../middleware/errors.js';
-import { signAccessToken } from '../middleware/auth.js';
+import { signAccessToken, setRefreshCookie, clearRefreshCookie, readRefreshToken } from '../middleware/auth.js';
 import { sendMail } from '../services/mailer.js';
 
 const EMAIL_RE = /^\S+@\S+\.\S+$/;
+const RESET_TTL_MS = 30 * 60 * 1000;
 
-function publicUser(u) {
+export function publicUser(u) {
   return {
-    id: u.id, name: u.name, email: u.email,
-    is_premium: Boolean(u.is_premium), premium_until: u.premium_until || null,
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    is_premium: Boolean(u.is_premium),
+    premium_until: u.premium_until || null,
   };
 }
 
-function sha256(s) {
-  return crypto.createHash('sha256').update(s).digest('hex');
+const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
+
+async function issueSession(res, user, userAgent) {
+  const accessToken = signAccessToken(user);
+  const refreshToken = crypto.randomBytes(48).toString('hex');
+  await refreshTokens.create({
+    user_id: user.id,
+    token_hash: sha256(refreshToken),
+    expires_at: new Date(Date.now() + config.jwt.refreshDays * 24 * 3600 * 1000).toISOString(),
+    user_agent: userAgent ? String(userAgent).slice(0, 300) : null,
+  });
+  setRefreshCookie(res, refreshToken);
+  return { user: publicUser(user), accessToken };
 }
 
 export const register = asyncHandler(async (req, res) => {
@@ -24,71 +39,44 @@ export const register = asyncHandler(async (req, res) => {
   if (!name || String(name).trim().length < 2) throw new HttpError(400, 'Nama minimal 2 karakter.');
   if (!email || !EMAIL_RE.test(String(email))) throw new HttpError(400, 'Format email tidak valid.');
   if (!password || String(password).length < 8) throw new HttpError(400, 'Kata sandi minimal 8 karakter.');
-  const normalized = String(email).trim().toLowerCase();
-  const exists = await query('SELECT id FROM users WHERE lower(email) = $1', [normalized]);
-  if (exists.rowCount > 0) throw new HttpError(409, 'Email sudah terdaftar. Silakan masuk atau gunakan email lain.');
-  const hash = await bcrypt.hash(String(password), 10);
-  const { rows } = await query(
-    'INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id, name, email, is_premium, premium_until',
-    [String(name).trim(), String(email).trim(), hash],
-  );
-  const user = rows[0];
-  const { accessToken, refreshToken } = await issueSession(user.id, req.headers['user-agent']);
-  res.status(201).json({ user: publicUser(user), accessToken, refreshToken });
+  if (await users.findByEmail(email)) throw new HttpError(409, 'Email sudah terdaftar. Silakan masuk atau gunakan email lain.');
+  const created = await users.create({
+    name: String(name).trim(),
+    email: String(email).trim(),
+    password_hash: await bcrypt.hash(String(password), 10),
+  });
+  res.status(201).json(await issueSession(res, created, req.headers['user-agent']));
 });
 
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) throw new HttpError(400, 'Email dan kata sandi wajib diisi.');
-  const { rows } = await query('SELECT * FROM users WHERE lower(email) = lower($1)', [String(email).trim()]);
-  const user = rows[0];
+  const user = await users.findByEmail(email);
   if (!user || !(await bcrypt.compare(String(password), user.password_hash))) {
     throw new HttpError(401, 'Email atau kata sandi salah.');
   }
-  const { accessToken, refreshToken } = await issueSession(user.id, req.headers['user-agent']);
-  res.json({ user: publicUser(user), accessToken, refreshToken });
+  res.json(await issueSession(res, user, req.headers['user-agent']));
 });
 
-async function issueSession(userId, userAgent) {
-  const { rows } = await query('SELECT id, name, email, is_premium, premium_until FROM users WHERE id = $1', [userId]);
-  const user = rows[0];
-  const accessToken = signAccessToken(user);
-  const refreshToken = crypto.randomBytes(48).toString('hex');
-  const expiresAt = new Date(Date.now() + config.jwt.refreshDays * 24 * 3600 * 1000);
-  await query(
-    'INSERT INTO refresh_tokens (user_id, token_hash, expires_at, user_agent) VALUES ($1, $2, $3, $4)',
-    [userId, sha256(refreshToken), expiresAt.toISOString(), userAgent ? String(userAgent).slice(0, 300) : null],
-  );
-  return { accessToken, refreshToken, user };
-}
-
 export const refresh = asyncHandler(async (req, res) => {
-  const { refreshToken } = req.body || {};
-  if (!refreshToken) throw new HttpError(400, 'Refresh token wajib diisi.');
-  const { rows } = await query(
-    'SELECT rt.*, u.name, u.email, u.is_premium, u.premium_until FROM refresh_tokens rt JOIN users u ON u.id = rt.user_id WHERE rt.token_hash = $1',
-    [sha256(String(refreshToken))],
-  );
-  const row = rows[0];
+  const token = readRefreshToken(req);
+  if (!token) throw new HttpError(401, 'Sesi tidak ditemukan. Silakan masuk kembali.', { code: 'NO_REFRESH' });
+  const row = await refreshTokens.findByHash(sha256(token));
   if (!row || row.revoked_at || new Date(row.expires_at) < new Date()) {
-    throw new HttpError(401, 'Refresh token tidak valid atau kedaluwarsa. Silakan masuk kembali.');
+    clearRefreshCookie(res);
+    throw new HttpError(401, 'Sesi sudah berakhir. Silakan masuk kembali.', { code: 'REFRESH_INVALID' });
   }
-  // Rotasi: cabut token lama, terbitkan pasangan baru.
-  await withTransaction(async (client) => {
-    await client.query('UPDATE refresh_tokens SET revoked_at = now() WHERE id = $1', [row.id]);
-  });
-  const { accessToken, refreshToken: next } = await issueSession(row.user_id, req.headers['user-agent']);
-  res.json({
-    user: publicUser({ id: row.user_id, name: row.name, email: row.email, is_premium: row.is_premium, premium_until: row.premium_until }),
-    accessToken, refreshToken: next,
-  });
+  const user = await users.findById(row.user_id);
+  if (!user) throw new HttpError(401, 'Akun tidak ditemukan.', { code: 'NO_USER' });
+  // Rotasi: token lama dicabut, pasangan token baru diterbitkan.
+  await refreshTokens.revokeById(row.id);
+  res.json(await issueSession(res, user, req.headers['user-agent']));
 });
 
 export const logout = asyncHandler(async (req, res) => {
-  const { refreshToken } = req.body || {};
-  if (refreshToken) {
-    await query('UPDATE refresh_tokens SET revoked_at = now() WHERE token_hash = $1', [sha256(String(refreshToken))]);
-  }
+  const token = readRefreshToken(req);
+  if (token) await refreshTokens.revokeByHash(sha256(token));
+  clearRefreshCookie(res);
   res.json({ ok: true });
 });
 
@@ -96,51 +84,54 @@ export const me = asyncHandler(async (req, res) => {
   res.json({ user: publicUser(req.user) });
 });
 
-// POST /auth/forgot-password — selalu balas generik 200 agar tidak membocorkan
-// akun mana yang terdaftar (anti-enumerasi). Token kedaluwarsa 30 menit (FR-01).
+// Selalu balas generik 200 agar akun mana yang terdaftar tidak bisa ditebak.
+// Token sekali pakai, berlaku 30 menit, disimpan sebagai hash.
 export const forgotPassword = asyncHandler(async (req, res) => {
   const { email } = req.body || {};
   if (!config.mail.configured) {
-    throw new HttpError(503, 'Layanan email belum dikonfigurasi di server. Hubungi administrator agar SMTP diisi (MAIL_*), lalu coba lagi.', { code: 'MAIL_NOT_CONFIGURED' });
+    throw new HttpError(503, 'Layanan email belum dikonfigurasi di server (MAIL_HOST/MAIL_USER/MAIL_PASS). Reset password via email belum bisa dipakai.', { code: 'MAIL_NOT_CONFIGURED' });
   }
   if (email && EMAIL_RE.test(String(email))) {
-    const { rows } = await query('SELECT id, name FROM users WHERE lower(email) = lower($1)', [String(email).trim()]);
-    if (rows.length > 0) {
+    const user = await users.findByEmail(email);
+    if (user) {
       const token = crypto.randomBytes(32).toString('hex');
-      const expires = new Date(Date.now() + 30 * 60 * 1000);
-      await query('UPDATE users SET reset_token_hash = $1, reset_token_expires_at = $2 WHERE id = $3',
-        [sha256(token), expires.toISOString(), rows[0].id]);
+      await users.update(user.id, {
+        reset_token_hash: sha256(token),
+        reset_token_expires_at: new Date(Date.now() + RESET_TTL_MS).toISOString(),
+      });
       const link = `${config.frontendUrl}/#/atur-ulang?token=${token}`;
-      await sendMail({
-        to: String(email).trim(),
-        subject: 'Reset kata sandi Runut (berlaku 30 menit)',
-        text: `Halo ${rows[0].name},\n\nTautan reset kata sandi Anda (berlaku 30 menit):\n${link}\n\nJika Anda tidak memintanya, abaikan email ini.`,
-        html: `<p>Halo ${rows[0].name},</p><p>Tautan reset kata sandi Anda (berlaku 30 menit):</p><p><a href="${link}">${link}</a></p><p>Jika Anda tidak memintanya, abaikan email ini.</p>`,
-      }).catch((e) => console.error('[mail] gagal kirim reset:', e.message));
+      try {
+        await sendMail({
+          to: user.email,
+          subject: 'Reset kata sandi Runut (berlaku 30 menit)',
+          text: `Halo ${user.name},\n\nTautan reset kata sandi Anda (berlaku 30 menit):\n${link}\n\nJika Anda tidak memintanya, abaikan email ini.`,
+          html: `<p>Halo ${user.name},</p><p>Tautan reset kata sandi Anda (berlaku 30 menit):</p><p><a href="${link}">${link}</a></p><p>Jika Anda tidak memintanya, abaikan email ini.</p>`,
+        });
+      } catch (err) {
+        // Pengiriman gagal tidak boleh dilaporkan sebagai berhasil.
+        console.error(JSON.stringify({ event: 'mail_failed', reason: err.message }));
+        throw new HttpError(502, 'Tautan reset gagal dikirim oleh server email. Coba lagi nanti atau hubungi administrator.', { code: 'MAIL_FAILED' });
+      }
     }
   }
   res.json({ ok: true, message: 'Jika email terdaftar, tautan reset telah dikirim (berlaku 30 menit).' });
 });
 
-// POST /auth/reset-password { token, password }
+// Token sekali pakai: setelah dipakai dihapus, dan semua sesi refresh dicabut.
 export const resetPassword = asyncHandler(async (req, res) => {
   const { token, password } = req.body || {};
   if (!token) throw new HttpError(400, 'Token reset wajib diisi.');
   if (!password || String(password).length < 8) throw new HttpError(400, 'Kata sandi baru minimal 8 karakter.');
-  const { rows } = await query('SELECT id, reset_token_expires_at FROM users WHERE reset_token_hash = $1', [sha256(String(token))]);
-  const user = rows[0];
+  const user = await users.findByResetTokenHash(sha256(String(token)));
   if (!user || !user.reset_token_expires_at || new Date(user.reset_token_expires_at) < new Date()) {
     throw new HttpError(400, 'Token reset tidak valid atau sudah kedaluwarsa (maksimal 30 menit). Silakan minta tautan baru.');
   }
-  const hash = await bcrypt.hash(String(password), 10);
-  await withTransaction(async (client) => {
-    await client.query(
-      'UPDATE users SET password_hash = $1, reset_token_hash = NULL, reset_token_expires_at = NULL, updated_at = now() WHERE id = $2',
-      [hash, user.id],
-    );
-    // Cabut semua sesi refresh agar perangkat lain harus masuk ulang.
-    await client.query('UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL', [user.id]);
+  await users.update(user.id, {
+    password_hash: await bcrypt.hash(String(password), 10),
+    reset_token_hash: null,
+    reset_token_expires_at: null,
   });
+  await refreshTokens.revokeAllForUser(user.id);
+  clearRefreshCookie(res);
   res.json({ ok: true, message: 'Kata sandi berhasil diubah. Silakan masuk kembali.' });
 });
-

@@ -3,7 +3,6 @@ import { ref, onMounted } from 'vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
 import SectionLabel from '../components/SectionLabel.vue'
-import SignalsCard from '../components/SignalsCard.vue'
 import { documents } from '../store/documents'
 
 const props = defineProps({ id: String })
@@ -50,12 +49,11 @@ onMounted(() => load(props.id || window.location.hash.match(/\/dokumen\/([^/?]+)
         <input v-model="renamed" class="h-11 border-2 border-black px-3 text-sm font-bold uppercase tracking-wide" aria-label="Judul dokumen" />
         <BaseButton size="sm" variant="secondary" @click="saveTitle">Ganti judul</BaseButton>
         <BaseButton size="sm" @click="openFull" to="/hasil">Buka hasil lengkap <i class="fa-solid fa-arrow-right text-xs"></i></BaseButton>
+        <BaseButton size="sm" variant="secondary" :to="`/bandingkan/${data.document.id}`">Bandingkan</BaseButton>
         <BaseButton size="sm" variant="secondary" @click="download('txt')">Unduh .txt</BaseButton>
         <BaseButton size="sm" variant="secondary" @click="download('docx')">Unduh .docx</BaseButton>
         <BaseButton variant="secondary" size="sm" to="/riwayat">Kembali</BaseButton>
       </div>
-
-      <SignalsCard v-if="data?.analysis?.signals || data?.analysis?.stats?.signals" :signals="data.analysis.signals || data.analysis.stats.signals" class="mt-8" />
 
       <div class="mt-8 grid gap-6 md:grid-cols-2">
         <BaseCard>
@@ -74,8 +72,8 @@ onMounted(() => load(props.id || window.location.hash.match(/\/dokumen\/([^/?]+)
     </div>
 
     <div v-else class="mt-8 border-4 border-black bg-[#F2F2F2] p-10 text-center">
-      <p class="font-black uppercase tracking-tight">Dokumennya nggak ketemu.</p>
-      <p class="mt-1 text-sm text-black/60">{{ error || 'Mungkin udah dihapus, kedaluwarsa 30 hari, atau bukan milik akunmu.' }}</p>
+      <p class="font-black uppercase tracking-tight">Dokumen tidak ditemukan.</p>
+      <p class="mt-1 text-sm text-black/60">{{ error || 'Kemungkinan sudah dihapus, kedaluwarsa setelah 30 hari, atau bukan milik akunmu.' }}</p>
       <BaseButton to="/riwayat" class="mt-6">Balik ke riwayat</BaseButton>
     </div>
   </section>

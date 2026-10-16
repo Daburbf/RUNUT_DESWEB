@@ -44,7 +44,7 @@ function toggleAll() {
 async function removeIds(ids) {
   try {
     await documents.removeMany(ids)
-    say(ids.length > 1 ? `${ids.length} dokumen dihapus.` : 'Udah dihapus.')
+    say(ids.length > 1 ? `${ids.length} dokumen dihapus.` : 'Dokumen dihapus.')
     selected.value = new Set()
     target.value = null
     confirmMulti.value = false
@@ -59,7 +59,7 @@ onMounted(load)
     <div class="grid gap-8 md:grid-cols-[5fr_7fr] md:items-end">
       <div>
         <SectionLabel>Riwayat</SectionLabel>
-        <h1 class="mt-4 text-5xl font-black uppercase leading-[0.9] tracking-tighter md:text-6xl">Yang pernah dicek</h1>
+        <h1 class="mt-4 text-5xl font-black uppercase leading-[0.9] tracking-tighter md:text-6xl">Yang pernah diperiksa</h1>
       </div>
       <div class="relative">
         <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-sm"></i>
@@ -101,24 +101,24 @@ onMounted(load)
       </div>
       <div v-else class="mt-8 flex flex-col items-center border-4 border-black bg-[#F2F2F2] px-6 py-16 text-center">
         <span class="mb-6 flex h-20 w-20 items-center justify-center border-2 border-black bg-white"><i class="fa-regular fa-folder-open text-3xl"></i></span>
-        <p class="font-black uppercase tracking-tight">{{ q ? 'Nggak ketemu yang cocok.' : 'Belum ada yang dicek.' }}</p>
-        <p class="mb-6 mt-1 text-sm text-black/60">Abis analisis, dokumen otomatis kesimpen di server selama 30 hari.</p>
+        <p class="font-black uppercase tracking-tight">{{ q ? 'Tidak ada dokumen yang cocok.' : 'Belum ada dokumen yang diperiksa.' }}</p>
+        <p class="mb-6 mt-1 text-sm text-black/60">Setelah dianalisis, dokumen tersimpan otomatis di server selama 30 hari.</p>
         <BaseButton to="/analisis">Cek tulisan</BaseButton>
       </div>
     </template>
 
     <BaseModal :open="!!target" title="Hapus ini?" @close="target = null">
-      <p class="border-l-4 border-[#FF3000] bg-[#F2F2F2] p-4 text-sm">“{{ target?.title }}” bakal ilang permanen, nggak bisa dibalikin.</p>
+      <p class="border-l-4 border-[#FF3000] bg-[#F2F2F2] p-4 text-sm">“{{ target?.title }}” akan dihapus permanen dan tidak bisa dipulihkan.</p>
       <div class="mt-6 flex justify-end gap-2">
-        <BaseButton variant="secondary" size="sm" @click="target = null">Gajadi</BaseButton>
-        <BaseButton variant="accent" size="sm" @click="removeIds([target.id])">Hapus aja</BaseButton>
+        <BaseButton variant="secondary" size="sm" @click="target = null">Batal</BaseButton>
+        <BaseButton variant="accent" size="sm" @click="removeIds([target.id])">Hapus</BaseButton>
       </div>
     </BaseModal>
 
     <BaseModal :open="confirmMulti" title="Hapus yang dipilih?" @close="confirmMulti = false">
-      <p class="border-l-4 border-[#FF3000] bg-[#F2F2F2] p-4 text-sm">{{ selected.size }} dokumen bakal ilang permanen.</p>
+      <p class="border-l-4 border-[#FF3000] bg-[#F2F2F2] p-4 text-sm">{{ selected.size }} dokumen akan dihapus permanen.</p>
       <div class="mt-6 flex justify-end gap-2">
-        <BaseButton variant="secondary" size="sm" @click="confirmMulti = false">Gajadi</BaseButton>
+        <BaseButton variant="secondary" size="sm" @click="confirmMulti = false">Batal</BaseButton>
         <BaseButton variant="accent" size="sm" @click="removeIds([...selected])">Hapus semua</BaseButton>
       </div>
     </BaseModal>

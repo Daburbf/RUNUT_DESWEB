@@ -13,7 +13,7 @@ const busy = ref(false)
 async function submit() {
   error.value = ''
   msg.value = ''
-  if (!/^\S+@\S+\.\S+$/.test(email.value)) { error.value = 'Emailnya kayaknya salah ketik deh.'; return }
+  if (!/^\S+@\S+\.\S+$/.test(email.value)) { error.value = 'Format email tidak valid. Periksa kembali penulisannya.'; return }
   busy.value = true
   try {
     const r = await api('/api/auth/forgot-password', { method: 'POST', body: { email: email.value.trim() } })
