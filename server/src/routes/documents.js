@@ -1,6 +1,7 @@
 import { documents, analyses, issues as issuesRepo } from '../repositories/index.js';
 import { HttpError, asyncHandler } from '../middleware/errors.js';
 import { countWords } from '../services/stats.js';
+import { FREE_SHOWN_ISSUES } from './analysis.js';
 
 const DECISIONS = new Set(['active', 'applied', 'rejected']);
 
@@ -12,6 +13,10 @@ async function ownDocument(userId, id) {
 }
 
 const latestAnalysis = (documentId) => analyses.findLatestByDocument(documentId);
+
+// Batas tampilan saran untuk akun gratis dipakai seragam oleh endpoint analisis
+// dan endpoint dokumen, supaya yang terlihat di layar sama dengan meta.shown.
+const visibleIssues = (user, list) => (user.is_premium ? list : list.slice(0, FREE_SHOWN_ISSUES));
 
 // Kutipan harus masih cocok dengan teks pada posisi tersimpan; kalau teks sudah
 // berubah, saran itu dibatalkan (pengguna diminta menganalisis ulang).
@@ -50,6 +55,7 @@ export const getDocument = asyncHandler(async (req, res) => {
   const doc = await ownDocument(req.user.id, req.params.id);
   const analysis = await latestAnalysis(doc.id);
   const issues = analysis ? await issuesRepo.listByAnalysis(analysis.id) : [];
+  const shown = visibleIssues(req.user, issues);
   res.json({
     document: {
       id: doc.id, title: doc.title,
@@ -62,11 +68,11 @@ export const getDocument = asyncHandler(async (req, res) => {
       id: analysis.id, stats: analysis.stats, locked: analysis.locked,
       ai: { provider: analysis.ai_provider, model: analysis.ai_model, latencyMs: analysis.ai_latency_ms, status: analysis.ai_status },
     } : null,
-    issues,
+    issues: shown,
     meta: {
       is_premium: req.user.is_premium,
       total_found: issues.length,
-      shown: req.user.is_premium ? issues.length : Math.min(issues.length, 3),
+      shown: shown.length,
       locked_note: req.user.is_premium ? null : 'Akun gratis menampilkan maksimal 3 masalah. Saran perbaikan terbuka di Premium.',
     },
   });
@@ -128,7 +134,7 @@ export const restoreOriginal = asyncHandler(async (req, res) => {
   const analysis = await latestAnalysis(doc.id);
   if (analysis) await issuesRepo.resetDecisions(analysis.id);
   await documents.update(doc.id, { revised_text: null, status: 'analyzed' });
-  res.json({ ok: true, revised_text: doc.original_text, issues: analysis ? await issuesRepo.listByAnalysis(analysis.id) : [] });
+  res.json({ ok: true, revised_text: doc.original_text, issues: analysis ? visibleIssues(req.user, await issuesRepo.listByAnalysis(analysis.id)) : [] });
 });
 
 export const renameDocument = asyncHandler(async (req, res) => {

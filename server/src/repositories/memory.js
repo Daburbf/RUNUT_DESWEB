@@ -8,6 +8,13 @@ import { randomUUID } from 'node:crypto';
 const now = () => new Date().toISOString();
 const clone = (row) => (row ? { ...row } : row);
 
+// Mode demo presentasi: DEMO_PREMIUM=1 membuat akun baru langsung berstatus
+// Premium supaya alur "terapkan saran" bisa diperlihatkan tanpa jalur
+// pembayaran (pembayaran masih 501). Dibaca saat dipanggil, bukan saat modul
+// dimuat, agar tidak bergantung urutan pemuatan dotenv. Selalu mati saat tes
+// berjalan (NODE_ENV=test) supaya rangkaian uji menguji perilaku sebenarnya.
+const demoPremium = () => process.env.DEMO_PREMIUM === '1' && process.env.NODE_ENV !== 'test';
+
 export function createMemoryRepositories() {
   const tables = {
     users: [],
@@ -25,12 +32,13 @@ export function createMemoryRepositories() {
 
   const users = {
     async create({ name, email, password_hash }) {
+      const premium = demoPremium();
       return insert('users', {
         name,
         email,
         password_hash,
-        is_premium: false,
-        premium_until: null,
+        is_premium: premium,
+        premium_until: premium ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() : null,
         reset_token_hash: null,
         reset_token_expires_at: null,
         updated_at: now(),

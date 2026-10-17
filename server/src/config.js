@@ -72,5 +72,8 @@ export function checkStartupConfig() {
   }
   problems.push('Pembayaran belum dibuka: halaman Premium hanya menampilkan paket dan metode pembayaran sebagai gambaran; /api/payments menjawab 501.');
   if (!config.mail.configured) problems.push('SMTP belum dikonfigurasi - reset password via email menjawab 503.');
+  if (process.env.DEMO_PREMIUM === '1') {
+    problems.push('DEMO_PREMIUM=1: setiap akun baru langsung berstatus Premium (khusus demo, penyimpanan memori). Kosongkan untuk perilaku normal.');
+  }
   return problems;
 }

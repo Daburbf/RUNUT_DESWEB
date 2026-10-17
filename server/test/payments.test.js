@@ -25,6 +25,10 @@ test('semua endpoint pembayaran menjawab 501 dan tidak mengaktifkan Premium', as
   const agent = request.agent(app);
   const user = await newUser(agent);
   const auth = { Authorization: `Bearer ${user.token}` };
+  // Status Premium sebelum transaksi dicoba. Uji ini mengunci bahwa endpoint
+  // pembayaran tidak bisa MENGUBAH status itu, bukan bahwa status selalu false
+  // (DEMO_PREMIUM=1 membuat akun demo langsung Premium tanpa lewat HTTP).
+  const before = (await agent.get('/api/auth/me').set(auth)).body.user.is_premium;
 
   const created = await agent.post('/api/payments').set(auth).send({ amount: 1 });
   assert.equal(created.status, 501, JSON.stringify(created.body));
@@ -36,7 +40,7 @@ test('semua endpoint pembayaran menjawab 501 dan tidak mengaktifkan Premium', as
   assert.equal((await request(app).post('/api/payments/notify').send({ order_id: 'ORDER-1', signature_key: 'apa saja' })).status, 501);
 
   const me = await agent.get('/api/auth/me').set(auth);
-  assert.equal(me.body.user.is_premium, false, 'premium tidak bisa diaktifkan lewat HTTP');
+  assert.equal(me.body.user.is_premium, before, 'endpoint pembayaran tidak boleh mengubah status Premium');
 });
 
 test('health menampilkan harga Premium sebagai tampilan saja', async () => {
