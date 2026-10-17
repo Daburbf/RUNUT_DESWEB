@@ -1,4 +1,4 @@
-// Lapisan provider AI — terpisah dari aturan bisnis analisis.
+// Lapisan provider AI - terpisah dari aturan bisnis analisis.
 // Satu-satunya provider yang diimplementasikan pada tahap ini: 9Router
 // (endpoint kompatibel OpenAI: POST {baseUrl}/chat/completions).
 // Menambah provider lain (mis. Qwen via Ollama) cukup menambah entri di
@@ -90,7 +90,7 @@ function explainHttpStatus(status, body) {
     return new AiError('Provider AI menolak kredensial (HTTP ' + status + '). Periksa AI_API_KEY pada server/.env.', { code: 'AI_AUTH_' + status, status: 503, retryable: false });
   }
   if (status === 404) {
-    return new AiError('Model atau endpoint tidak ditemukan di provider AI (HTTP 404). Periksa AI_MODEL dan AI_BASE_URL — gunakan ID model yang benar-benar tersedia di dashboard 9Router.', { code: 'AI_MODEL_NOT_FOUND', status: 503, retryable: false });
+    return new AiError('Model atau endpoint tidak ditemukan di provider AI (HTTP 404). Periksa AI_MODEL dan AI_BASE_URL - gunakan ID model yang benar-benar tersedia di dashboard 9Router.', { code: 'AI_MODEL_NOT_FOUND', status: 503, retryable: false });
   }
   if (status === 429) {
     return new AiError('Provider AI membatasi permintaan (HTTP 429). Coba lagi beberapa saat.', { code: 'AI_RATE_LIMIT', status: 429, retryable: true });

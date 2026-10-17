@@ -3,8 +3,8 @@ import BaseCard from './BaseCard.vue'
 defineProps({ icon: String, title: String, desc: String, num: String })
 </script>
 <template>
-  <!-- Dokumentasi: kartu fitur Swiss — hover inversi penuh putih→merah,
-       ikon panah berotasi -45°→0°. Nomor seksi merah. -->
+  <!-- Dokumentasi: kartu fitur Swiss - hover inversi penuh putih->merah,
+       ikon panah berotasi -45°->0°. Nomor seksi merah. -->
   <BaseCard class="swiss-snap group flex min-h-[280px] cursor-default flex-col justify-between p-8 hover:bg-[#FF3000] hover:text-white">
     <div class="flex items-start justify-between">
       <span class="font-mono text-sm font-medium text-[#FF3000] group-hover:text-white">{{ num }}</span>

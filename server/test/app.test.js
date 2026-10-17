@@ -63,8 +63,6 @@ process.env.AI_BASE_URL = stubUrl;
 process.env.AI_API_KEY = 'test-key';
 process.env.AI_MODEL = 'vendor/model-uji';
 process.env.AI_TIMEOUT_MS = '2000';
-delete process.env.MIDTRANS_SERVER_KEY;
-delete process.env.PREMIUM_PRICE_IDR;
 delete process.env.MAIL_HOST;
 
 const { createApp } = await import('../src/app.js');
@@ -311,20 +309,6 @@ test('riwayat: daftar, kepemilikan dokumen, unduhan, dan hapus', async () => {
   assert.equal(del.status, 200);
   assert.deepEqual(del.body.deleted, [docId]);
   assert.equal((await owner.get('/api/documents').set(auth)).body.documents.length, 0);
-});
-
-test('pembayaran belum dikonfigurasi dilaporkan jujur, bukan sukses palsu', async () => {
-  const agent = request.agent(app);
-  const user = await newUser(agent);
-  const auth = { Authorization: `Bearer ${user.token}` };
-  const res = await agent.post('/api/payments').set(auth).send({});
-  assert.equal(res.status, 503);
-  assert.equal(res.body.code, 'MIDTRANS_NOT_CONFIGURED');
-  const list = await agent.get('/api/payments').set(auth);
-  assert.deepEqual(list.body.payments, []);
-
-  const notify = await agent.post('/api/payments/notify').send({ order_id: 'X', status_code: '200', gross_amount: '1', signature_key: 'salah' });
-  assert.equal(notify.status, 503, 'notifikasi ditolak selama Midtrans belum dikonfigurasi');
 });
 
 test('kegagalan provider AI: tidak dikonfigurasi, 401/404, 500, JSON rusak, dan timeout', async () => {

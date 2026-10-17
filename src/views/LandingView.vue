@@ -25,17 +25,17 @@ const keys = Object.keys(CATEGORIES)
     <section class="border-b-4 border-black">
       <div class="mx-auto grid max-w-6xl md:grid-cols-[8fr_4fr]">
         <div class="px-4 py-14 sm:px-6 md:py-24">
-          <SectionLabel>01 / Sistem — Analisis pola tulisan</SectionLabel>
+          <SectionLabel>01 / Sistem - Analisis pola tulisan</SectionLabel>
           <h1 class="mt-6 text-6xl font-black uppercase leading-[0.9] tracking-tighter sm:text-7xl md:text-8xl">
             Tulisanmu,<br />lebih <span class="bg-[#FF3000] px-2 text-white">runut</span>.
           </h1>
           <p class="mt-6 max-w-xl text-base leading-relaxed text-black/70">
             Untuk tugas, esai, atau laporan berbahasa Indonesia yang terasa monoton.
-            Tempel ke sini, nanti kelihatan bagian mana yang perlu dibenahi — dengan penjelasan spesifik, bukan skor rekaan.
+            Tempel ke sini, nanti kelihatan bagian mana yang perlu dibenahi - dengan penjelasan spesifik, bukan skor rekaan.
           </p>
           <div class="mt-8 flex flex-col gap-3 sm:flex-row">
             <BaseButton :to="auth.user ? '/analisis' : '/daftar'" size="lg">Coba sekarang <i class="fa-solid fa-arrow-right text-xs"></i></BaseButton>
-            <BaseButton to="/tentang" variant="secondary" size="lg">Tentang aplikasi</BaseButton>
+            <BaseButton to="/tentang" variant="secondary" size="lg">Tentang website</BaseButton>
           </div>
           <div class="mt-10 flex flex-wrap gap-6 border-t-2 border-black pt-6">
             <p class="font-mono text-xs uppercase tracking-widest"><span class="text-2xl font-black">6</span><br />Kategori diperiksa</p>
@@ -45,13 +45,13 @@ const keys = Object.keys(CATEGORIES)
         </div>
         <div class="relative hidden min-h-[480px] overflow-hidden border-l-4 border-black bg-[#F2F2F2] md:flex" aria-hidden="true">
           <div class="swiss-diagonal absolute inset-0"></div>
-          <p class="absolute bottom-8 left-8 right-8 border-2 border-black bg-white p-4 font-mono text-xs uppercase tracking-widest">Tempel → tandai → perbaiki → unduh</p>
+          <p class="absolute bottom-8 left-8 right-8 border-2 border-black bg-white p-4 font-mono text-xs uppercase tracking-widest">Tempel -> tandai -> perbaiki -> unduh</p>
         </div>
       </div>
     </section>
 
     <section class="mx-auto max-w-6xl px-4 py-16 sm:px-6 md:py-24">
-      <SectionLabel>02 / Yang diperiksa — Enam hal</SectionLabel>
+      <SectionLabel>02 / Yang diperiksa - Enam hal</SectionLabel>
       <div class="mt-6 grid gap-8 md:grid-cols-[5fr_7fr] md:items-end">
         <h2 class="text-4xl font-black uppercase leading-[0.95] tracking-tighter md:text-6xl">Bukan cek typo. Cek kebiasaan.</h2>
         <p class="text-black/70 md:pb-1">Enam kategori analisis sesuai rancangan: pengulangan kata, pola kalimat, struktur seragam, transisi, formalitas, dan konsistensi gaya.</p>
@@ -84,7 +84,7 @@ const keys = Object.keys(CATEGORIES)
       <div class="border-4 border-black bg-black p-8 text-white md:p-16">
         <SectionLabel>04 / Mulai</SectionLabel>
         <h2 class="mt-6 max-w-3xl text-4xl font-black uppercase leading-[0.95] tracking-tighter md:text-7xl">Sudah siap? Langsung mulai.</h2>
-        <p class="mt-4 max-w-xl text-white/60">Daftar dulu, gratis. Akun gratis bisa menganalisis sampai 500 kata; butuh lebih? Ada Premium via Midtrans.</p>
+        <p class="mt-4 max-w-xl text-white/60">Daftar dulu, gratis. Akun gratis bisa menganalisis sampai 500 kata; butuh lebih? Lihat paket Premium.</p>
         <div class="mt-8 flex flex-col gap-3 sm:flex-row">
           <BaseButton :to="auth.user ? '/analisis' : '/daftar'" variant="accent" size="lg">Mulai nulis</BaseButton>
           <BaseButton to="/premium" variant="ghost" size="lg" class="!border-white !text-white hover:!bg-white hover:!text-black">Lihat Premium</BaseButton>

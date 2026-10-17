@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 // Adapter penyimpanan SEMENTARA (in-memory) untuk pengembangan dan pengujian.
-// Isi hilang saat server dimatikan — bukan penyimpanan persisten dan bukan
+// Isi hilang saat server dimatikan - bukan penyimpanan persisten dan bukan
 // pengganti PostgreSQL. Logika bisnis hanya berbicara lewat kontrak repository
 // di ./index.js, sehingga adapter PostgreSQL dapat ditambahkan kemudian tanpa
 // mengubah routes/services.
@@ -14,7 +14,6 @@ export function createMemoryRepositories() {
     documents: [],
     analyses: [],
     issues: [],
-    payments: [],
     refresh_tokens: [],
   };
 
@@ -53,8 +52,8 @@ export function createMemoryRepositories() {
       Object.assign(row, patch, { updated_at: now() });
       return clone(row);
     },
-    // Aktivasi premium hanya dipanggil dari jalur pembayaran yang sudah
-    // terverifikasi (webhook Midtrans), tidak pernah dari permintaan klien.
+    // Aktivasi premium tidak bisa dipicu dari HTTP: pembayaran belum dibuka,
+    // jadi hanya dipanggil langsung oleh operator/migrasi bila diperlukan.
     async extendPremium(id, days) {
       const row = tables.users.find((u) => u.id === id);
       if (!row) return null;
@@ -176,27 +175,5 @@ export function createMemoryRepositories() {
     },
   };
 
-  const payments = {
-    async create(row) {
-      return insert('payments', { currency: 'IDR', status: 'pending', paid_at: null, raw_notify: null, updated_at: now(), ...row });
-    },
-    async findByOrderId(order_id) {
-      return clone(tables.payments.find((p) => p.order_id === order_id));
-    },
-    async update(id, patch) {
-      const row = tables.payments.find((p) => p.id === id);
-      if (!row) return null;
-      Object.assign(row, patch, { updated_at: now() });
-      return clone(row);
-    },
-    async listByUser(user_id, limit = 50) {
-      return tables.payments
-        .filter((p) => p.user_id === user_id)
-        .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
-        .slice(0, limit)
-        .map(clone);
-    },
-  };
-
-  return { users, refreshTokens, documents, analyses, issues, payments };
+  return { users, refreshTokens, documents, analyses, issues };
 }

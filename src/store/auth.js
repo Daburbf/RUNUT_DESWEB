@@ -1,4 +1,4 @@
-// Store sesi — JWT access token di memori, refresh token di cookie HttpOnly
+// Store sesi - JWT access token di memori, refresh token di cookie HttpOnly
 // milik server. Tidak ada token yang disimpan di localStorage.
 import { reactive } from 'vue';
 import { api, session, restoreSession } from '../utils/api';

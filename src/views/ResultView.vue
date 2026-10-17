@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
 import CategorySummary from '../components/CategorySummary.vue'
@@ -12,9 +12,30 @@ import { documents } from '../store/documents'
 import { auth } from '../store/auth'
 import { canon, CATEGORIES } from '../utils/categories'
 
+const route = useRoute()
 const router = useRouter()
 const draft = ref(documents.getCurrent())
-if (!draft.value) router.replace('/analisis')
+const loading = ref(!draft.value)
+const loadError = ref('')
+
+// Sumber kebenaran hasil adalah server: bila URL memuat id dokumen (dari
+// analisis baru, riwayat, atau tab baru), muat ulang dari sana. sessionStorage
+// hanya jalan pintas agar perpindahan halaman terasa instan.
+async function hydrate() {
+  const id = route.params.id || draft.value?.document?.id
+  if (!id) { router.replace('/analisis'); return }
+  if (draft.value?.document?.id === id) { loading.value = false; return }
+  try {
+    const fresh = await documents.get(id)
+    draft.value = fresh
+    documents.setCurrent(fresh)
+  } catch (e) {
+    loadError.value = e.message || 'Hasil tidak bisa dimuat.'
+  } finally {
+    loading.value = false
+  }
+}
+onMounted(hydrate)
 
 const filter = ref(null)
 const selected = ref(null)
@@ -38,7 +59,6 @@ const summary = computed(() => {
   }
   return [...map.entries()].map(([type, count]) => ({ type, count }))
 })
-const ai = computed(() => analysis.value?.ai || {})
 const scores = computed(() => stats.value.scores || {})
 const scoresList = computed(() => ['similarity', 'ai_usage']
   .map((key) => ({ key, ...(scores.value[key] || {}) }))
@@ -98,17 +118,29 @@ async function download(format) {
 </script>
 
 <template>
-  <section v-if="draft && doc" class="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+  <section v-if="loading" class="mx-auto max-w-6xl px-4 py-24 sm:px-6 text-center font-mono text-sm uppercase tracking-widest">
+    <i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Memuat hasil...
+  </section>
+
+  <section v-else-if="!draft || !doc" class="mx-auto max-w-3xl px-4 py-24 text-center sm:px-6">
+    <p class="font-black uppercase tracking-tight">Hasil tidak ditemukan.</p>
+    <p class="mt-2 text-sm text-black/60">{{ loadError || 'Dokumen mungkin sudah dihapus atau kedaluwarsa setelah 30 hari.' }}</p>
+    <div class="mt-8 flex justify-center gap-2">
+      <BaseButton to="/riwayat">Buka riwayat</BaseButton>
+      <BaseButton variant="secondary" to="/analisis">Analisis baru</BaseButton>
+    </div>
+  </section>
+
+  <section v-else class="mx-auto max-w-6xl px-4 py-10 sm:px-6">
     <SectionLabel>Hasil analisis</SectionLabel>
     <div class="mb-8 mt-4 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div>
         <h1 class="max-w-3xl text-4xl font-black uppercase leading-[0.95] tracking-tighter md:text-6xl">{{ doc.title }}</h1>
         <p class="mt-3 font-mono text-xs uppercase tracking-widest text-black/60">{{ stats.word_count }} kata · {{ stats.sentence_count }} kalimat · {{ issues.length }} temuan</p>
-        <p v-if="ai.model" class="mt-1 font-mono text-[11px] uppercase tracking-widest text-black/50">Model {{ ai.model }} · {{ ai.latencyMs }} ms · {{ ai.status }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
         <BaseButton variant="secondary" size="sm" to="/analisis"><i class="fa-solid fa-arrow-left"></i>Ganti teks</BaseButton>
-        <BaseButton variant="secondary" size="sm" :to="`/bandingkan`"><i class="fa-solid fa-code-compare"></i>Bandingkan</BaseButton>
+        <BaseButton variant="secondary" size="sm" :to="`/bandingkan/${doc.id}`"><i class="fa-solid fa-code-compare"></i>Bandingkan</BaseButton>
         <BaseButton variant="secondary" size="sm" @click="download('txt')"><i class="fa-solid fa-download"></i>.txt</BaseButton>
         <BaseButton variant="secondary" size="sm" @click="download('docx')"><i class="fa-solid fa-file-word"></i>.docx</BaseButton>
         <BaseButton variant="accent" size="sm" @click="restore"><i class="fa-solid fa-rotate-left"></i>Pulihkan asli</BaseButton>
@@ -142,22 +174,22 @@ async function download(format) {
               <p class="font-mono text-xs uppercase tracking-widest text-[#FF3000]">Similarity &amp; penggunaan AI</p>
             </div>
             <div class="mt-3 grid gap-3 sm:grid-cols-2">
-              <div v-for="m in scoresList" :key="m.key" class="border-2 border-black p-3">
+              <div v-for="m in scoresList" :key="m.key" class="border-2 border-black bg-black p-3 text-white">
                 <div class="flex items-end justify-between gap-2">
-                  <p class="font-mono text-[11px] uppercase tracking-widest text-black/60">{{ m.label }}</p>
-                  <p class="text-3xl font-black tabular-nums">{{ m.percent }}<span class="text-base">%</span></p>
+                  <p class="font-mono text-[11px] uppercase tracking-widest text-white/70">{{ m.label }}</p>
+                  <p class="text-3xl font-black tabular-nums text-white">{{ m.percent }}<span class="text-base">%</span></p>
                 </div>
-                <div class="mt-3 h-3 w-full border-2 border-black bg-white">
+                <div class="mt-3 h-3 w-full border-2 border-white bg-white">
                   <div class="h-full bg-[#FF3000] transition-[width] duration-500" :style="{ width: m.percent + '%' }"></div>
                 </div>
-                <div class="mt-1 flex justify-between font-mono text-[10px] uppercase tracking-widest text-black/40"><span>0%</span><span>100%</span></div>
+                <div class="mt-1 flex justify-between font-mono text-[10px] uppercase tracking-widest text-white/50"><span>0%</span><span>100%</span></div>
                 <div class="mt-3 space-y-2">
                   <div v-for="s in m.signals" :key="s.key">
-                    <div class="flex justify-between font-mono text-[10px] uppercase tracking-widest text-black/60"><span>{{ s.label }}</span><span class="tabular-nums">{{ s.percent }}%</span></div>
-                    <div class="mt-1 h-1.5 w-full bg-black/10"><div class="h-full bg-[#FF3000]" :style="{ width: s.percent + '%' }"></div></div>
+                    <div class="flex justify-between font-mono text-[10px] uppercase tracking-widest text-white/70"><span>{{ s.label }}</span><span class="tabular-nums text-white">{{ s.percent }}%</span></div>
+                    <div class="mt-1 h-1.5 w-full bg-white/20"><div class="h-full bg-[#FF3000]" :style="{ width: s.percent + '%' }"></div></div>
                   </div>
                 </div>
-                <p class="mt-3 text-xs leading-relaxed text-black/60">{{ m.note }}</p>
+                <p class="mt-3 text-xs leading-relaxed text-white/70">{{ m.note }}</p>
               </div>
             </div>
           </div>
@@ -198,12 +230,12 @@ async function download(format) {
           <ul class="divide-y-2 divide-black/10">
             <li v-for="i in decided" :key="i.id" class="flex items-start gap-3 px-4 py-3 text-sm">
               <span class="mt-0.5 h-3 w-3 shrink-0 border-2 border-black" :style="{ background: CATEGORIES[canon(i.category || i.type)].color }"></span>
-              <span class="min-w-0 flex-1"><span class="font-mono text-xs">“{{ i.snippet }}”</span></span>
+              <span class="min-w-0 flex-1"><span class="font-mono text-xs">"{{ i.snippet }}"</span></span>
               <span :class="['shrink-0 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest', statusOf(i) === 'applied' ? 'bg-black text-white' : 'border-2 border-black text-black/60']">{{ statusOf(i) === 'applied' ? 'Diterapkan' : 'Ditolak' }}</span>
             </li>
           </ul>
         </BaseCard>
-        <BaseModal :open="busy" title="Menyimpan…"><p class="text-sm">Keputusanmu sedang disimpan ke server.</p></BaseModal>
+        <BaseModal :open="busy" title="Menyimpan..."><p class="text-sm">Keputusanmu sedang disimpan ke server.</p></BaseModal>
       </aside>
     </div>
   </section>

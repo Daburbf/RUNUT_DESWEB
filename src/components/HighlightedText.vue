@@ -37,7 +37,7 @@ function markStyle(i) {
 </script>
 
 <template>
-  <div class="whitespace-pre-wrap text-[15px] leading-8 text-black">
+  <div class="whitespace-pre-wrap break-words text-[15px] leading-8 text-black">
     <template v-for="(p, idx) in parts" :key="idx">
       <mark v-if="p.issue" @click="$emit('pick', p.issue.id)" class="swiss-mark cursor-pointer"
         :title="`${cat(p.issue).label}${statusOf(p.issue) === 'applied' ? ' · saran sudah diterapkan' : ''}`"

@@ -1,7 +1,7 @@
 // Klien HTTP terpusat untuk backend Runut (VITE_API_URL, default :3000).
 // Access token disimpan di memori saja. Refresh token berada di cookie
 // HttpOnly milik server sehingga tidak bisa dibaca skrip halaman. Tidak ada
-// kredensial AI di sisi klien — semua rahasia milik server.
+// kredensial AI di sisi klien - semua rahasia milik server.
 const BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3000').replace(/\/$/, '');
 
 let accessToken = null;
@@ -50,7 +50,7 @@ async function raw(path, { method = 'GET', body, form, token } = {}) {
 
 // Refresh token dirotasi server: satu token hanya sah sekali. Bila beberapa
 // permintaan kena 401 bersamaan, semuanya harus menunggu SATU refresh yang sama
-// — kalau tidak, yang kalah balapan menerima 401 dan sesi ikut dibersihkan.
+// - kalau tidak, yang kalah balapan menerima 401 dan sesi ikut dibersihkan.
 let refreshing = null;
 
 export function refreshPair() {

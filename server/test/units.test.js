@@ -69,7 +69,7 @@ test('saran yang mengubah angka atau menghapus nama ditandai perlu cek manual', 
   assert.equal(valid[1].needs_manual_review, true, 'nama proper hilang pada saran');
 });
 
-test('skor kemiripan dan penggunaan AI deterministik, skala 0–100', () => {
+test('skor kemiripan dan penggunaan AI deterministik, skala 0-100', () => {
   const monoton = Array.from({ length: 8 }, (_, i) => `Selain itu penulis menambahkan data pendukung pada bagian ke ${i + 1}.`).join(' ');
   const bervariasi = 'Hujan turun. Sore itu saya membaca laporan keuangan yang panjang sekali sampai lupa waktu. Lalu tutup buku. Esoknya semuanya berubah tanpa pemberitahuan apa pun kepada kami.';
   const a = computeScores(monoton);

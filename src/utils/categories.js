@@ -1,4 +1,4 @@
-// Kategori kanonis — cerminan CATEGORIES di backend (sumber kebenaran).
+// Kategori kanonis - cerminan CATEGORIES di backend (sumber kebenaran).
 // Warna mengikuti SRS §9: kuning, biru, hijau, ungu, oranye, abu-abu.
 // SDD tidak menyelaraskan "keterbacaan" dengan "struktur seragam"; slot oranye
 // dipakai untuk struktur seragam agar keenam kategori tetap terwakili

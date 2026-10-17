@@ -122,7 +122,7 @@ export const decideIssues = asyncHandler(async (req, res) => {
   res.json({ ok: true, issues: fresh, revised_text: revised, document: { id: doc.id, status: 'revising' } });
 });
 
-// POST /api/documents/:id/restore — kembali ke teks asli.
+// POST /api/documents/:id/restore - kembali ke teks asli.
 export const restoreOriginal = asyncHandler(async (req, res) => {
   const doc = await ownDocument(req.user.id, req.params.id);
   const analysis = await latestAnalysis(doc.id);
@@ -139,18 +139,18 @@ export const renameDocument = asyncHandler(async (req, res) => {
   res.json({ ok: true, title });
 });
 
-// DELETE /api/documents — hapus satu atau beberapa dokumen setelah konfirmasi.
+// DELETE /api/documents - hapus satu atau beberapa dokumen setelah konfirmasi.
 export const deleteDocuments = asyncHandler(async (req, res) => {
   const ids = req.body?.ids;
   if (!Array.isArray(ids) || ids.length === 0 || ids.length > 50) {
-    throw new HttpError(400, 'Kirim "ids" berisi 1–50 id dokumen.');
+    throw new HttpError(400, 'Kirim "ids" berisi 1-50 id dokumen.');
   }
   const deleted = await documents.deleteMany(req.user.id, ids);
   if (deleted.length === 0) throw new HttpError(404, 'Tidak ada dokumen milik Anda pada daftar itu.');
   res.json({ ok: true, deleted });
 });
 
-// GET /api/documents/:id/download?format=txt|docx — teks revisi pilihan pengguna.
+// GET /api/documents/:id/download?format=txt|docx - teks revisi pilihan pengguna.
 export const downloadDocument = asyncHandler(async (req, res) => {
   const doc = await ownDocument(req.user.id, req.params.id);
   const analysis = await latestAnalysis(doc.id);

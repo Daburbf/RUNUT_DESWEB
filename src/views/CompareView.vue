@@ -42,7 +42,7 @@ onMounted(async () => {
         <p v-if="draft?.document" class="mt-3 font-mono text-xs uppercase tracking-widest text-black/60">{{ draft.document.title }}</p>
       </div>
       <div class="flex flex-wrap gap-2">
-        <BaseButton variant="secondary" size="sm" to="/hasil"><i class="fa-solid fa-arrow-left"></i>Kembali ke hasil</BaseButton>
+        <BaseButton variant="secondary" size="sm" :to="draft?.document ? `/hasil/${draft.document.id}` : '/riwayat'"><i class="fa-solid fa-arrow-left"></i>Kembali ke hasil</BaseButton>
         <BaseButton variant="secondary" size="sm" @click="copy"><i class="fa-regular fa-copy"></i>Salin revisi</BaseButton>
       </div>
     </div>

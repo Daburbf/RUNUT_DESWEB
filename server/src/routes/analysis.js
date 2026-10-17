@@ -42,7 +42,7 @@ async function extractText(file) {
   throw new HttpError(415, 'Format file tidak didukung. Gunakan TXT, DOCX, atau PDF (maksimal 5 MB).', { code: 'BAD_FILE_TYPE' });
 }
 
-// POST /api/analysis — body JSON { text, title, ai_consent } atau multipart
+// POST /api/analysis - body JSON { text, title, ai_consent } atau multipart
 // dengan field "file". Kata-kata pengguna dikirim ke provider AI hanya bila
 // pengguna menyatakan setuju (ai_consent: true).
 export const createAnalysis = asyncHandler(async (req, res) => {

@@ -1,18 +1,18 @@
-# Keputusan Teknis — Resolusi Ketidaksesuaian SRS / SDD Runut
+# Keputusan Teknis - Resolusi Ketidaksesuaian SRS / SDD Runut
 
 Dokumen ini mencatat perbedaan antara SRS, SDD, dan implementasi, beserta
-keputusan yang diambil dan alasannya. Tag `(D1)` … `(D9)` dirujuk dari kode.
+keputusan yang diambil dan alasannya. Tag `(D1)` ... `(D9)` dirujuk dari kode.
 
-## D1 — Stack: Node.js + Express + Vue 3 + Vite
+## D1 - Stack: Node.js + Express + Vue 3 + Vite
 
 - **Temuan:** bagian definisi SRS menyebut Laravel/MySQL, tetapi spesifikasi
   antarmuka SRS dan seluruh SDD menetapkan Node.js + Express + PostgreSQL,
   dengan frontend Vue 3 + Vite.
-- **Keputusan:** mengikuti SDD — **Vue 3 + Vite (frontend)** dan
+- **Keputusan:** mengikuti SDD - **Vue 3 + Vite (frontend)** dan
   **Node.js + Express (backend `server/`)**, JavaScript konsisten, tanpa
   abstraksi berlebih. Tidak ada kode Laravel/PHP di repo.
 
-## D2 — Penyimpanan sementara in-memory di balik antarmuka repository
+## D2 - Penyimpanan sementara in-memory di balik antarmuka repository
 
 - **Temuan:** SDD memuat skema SQL PostgreSQL, sementara tugas tahap ini
   melarang PostgreSQL/skema/migration/ORM.
@@ -21,10 +21,10 @@ keputusan yang diambil dan alasannya. Tag `(D1)` … `(D9)` dirujuk dari kode.
   (`repositories/memory.js`). Tabel: `users`, `refresh_tokens`, `documents`,
   `analyses`, `issues`, `payments`. Logika bisnis tidak menyentuh implementasi
   memori, sehingga adapter PostgreSQL ditambahkan nanti di satu titik tukar.
-- **Batas jujur:** data **bukan persisten** — hilang saat server dimulai ulang.
+- **Batas jujur:** data **bukan persisten** - hilang saat server dimulai ulang.
   Tidak diklaim siap produksi. LocalStorage **tidak** dipakai sebagai basis data.
 
-## D3 — Enam kategori & warna (struktur seragam mengambil slot oranye)
+## D3 - Enam kategori & warna (struktur seragam mengambil slot oranye)
 
 - **Temuan:** SDD tidak konsisten menyelaraskan kategori "struktur seragam"
   dengan label warna "keterbacaan".
@@ -45,13 +45,13 @@ keputusan yang diambil dan alasannya. Tag `(D1)` … `(D9)` dirujuk dari kode.
 - Sumber kebenaran ada di `server/src/services/stats.js` (`CATEGORIES`);
   `src/utils/categories.js` menyalin hex tersebut persis.
 
-## D4 — Batas kata: 500 gratis / 10.000 premium
+## D4 - Batas kata: 500 gratis / 10.000 premium
 
 - **Keputusan:** FR-03 ditegakkan **di server** (`routes/analysis.js`, HTTP 403
   `code: WORD_LIMIT`). Frontend hanya menampilkan penghitung kata real-time dan
   batas yang sama, bukan penentu.
 
-## D5 — Tidak ada AI score, kemungkinan tulisan AI, atau similarity eksternal
+## D5 - Tidak ada AI score, kemungkinan tulisan AI, atau similarity eksternal
 
 - **Temuan:** fitur "Indikasi AI %" dan "Kemiripan Teks %" pernah ada.
 - **Keputusan:** keduanya **dihapus** (backend, frontend, dan tes). Prompt AI
@@ -62,15 +62,15 @@ keputusan yang diambil dan alasannya. Tag `(D1)` … `(D9)` dirujuk dari kode.
 - **Catatan istilah:** "similarity" hanya berarti kemiripan pola **di dalam**
   dokumen yang sedang diperiksa, bukan perbandingan dengan karya lain.
 
-## D6 — Pemeringkatan masalah berbasis bukti, bukan skor model
+## D6 - Pemeringkatan masalah berbasis bukti, bukan skor model
 
 - **Keputusan:** `rankIssues()` memilih masalah untuk hasil gratis memakai bukti
   yang dapat diverifikasi ulang dari teks:
-  `3*(jumlah kemunculan−1) + 2*(jumlah paragraf−1) + (rentang ≥ 4 kata ? 1 : 0)`,
-  dengan urutan cadangan: non-manual → kutipan lebih panjang → posisi lebih awal.
+  `3*(jumlah kemunculan-1) + 2*(jumlah paragraf-1) + (rentang >= 4 kata ? 1 : 0)`,
+  dengan urutan cadangan: non-manual -> kutipan lebih panjang -> posisi lebih awal.
   Ini **bukan** persentase kualitas/keaslian dan tidak disajikan sebagai skor.
 
-## D7 — Status saran `active` | `applied` | `rejected`
+## D7 - Status saran `active` | `applied` | `rejected`
 
 - **Keputusan:** tiga status ini dipakai konsisten di backend, API, dan
   frontend. Teks asli disimpan terpisah dari teks revisi; "terapkan semua" hanya
@@ -80,16 +80,16 @@ keputusan yang diambil dan alasannya. Tag `(D1)` … `(D9)` dirujuk dari kode.
   berpotensi mengubah nama/angka/istilah penting ditandai `needs_manual_review`
   dan tidak pernah diterapkan otomatis.
 
-## D8 — Sesi: access token di memori, refresh token di cookie HttpOnly
+## D8 - Sesi: access token di memori, refresh token di cookie HttpOnly
 
-- **Keputusan:** access token (JWT, masa berlaku ≤ 1 jam) hanya hidup di memori
+- **Keputusan:** access token (JWT, masa berlaku <= 1 jam) hanya hidup di memori
   klien; refresh token disimpan server sebagai hash di repository dan dikirim
   sebagai cookie **HttpOnly** `runut_rt` (path `/api/auth`). Rotasi: token lama
   dicabut setiap refresh. **Tidak ada token apa pun di localStorage.** Saat
   halaman dimuat ulang, sesi dipulihkan dari cookie (`POST /api/auth/refresh`
   tanpa body).
 
-## D9 — Pembayaran premium memakai QRIS Midtrans (Core API), bukan Snap
+## D9 - Pembayaran premium memakai QRIS Midtrans (Core API), bukan Snap
 
 - **Temuan:** permintaan tambahan menetapkan QRIS lewat dokumentasi resmi
   Midtrans (`https://docs.midtrans.com/reference/qris`).
@@ -113,17 +113,17 @@ keputusan yang diambil dan alasannya. Tag `(D1)` … `(D9)` dirujuk dari kode.
 - **Sandbox/production:** dipisah lewat `MIDTRANS_IS_PRODUCTION` (host
   `api.sandbox.midtrans.com` vs `api.midtrans.com`). `MIDTRANS_API_BASE` hanya
   untuk mengarahkan ke lingkungan uji.
-- **Batas jujur:** transaksi disimpan di memori — hilang saat restart. Alur
+- **Batas jujur:** transaksi disimpan di memori - hilang saat restart. Alur
   belum diklaim siap produksi sebelum penyimpanan persisten ada.
 
-## D10 — Provider AI 9Router aktif; Qwen/Ollama ditunda
+## D10 - Provider AI 9Router aktif; Qwen/Ollama ditunda
 
 - **Keputusan:** satu jalur OpenAI-compatible (`POST {base}/chat/completions`,
   `Authorization: Bearer <key>`, tanpa `response_format`) lewat
   `services/aiProvider.js`. Model wajib dari akun 9Router pengguna; tidak ada ID
   model yang dikarang. Tanpa konfigurasi lengkap, analisis menjawab 503
-  `AI_NOT_CONFIGURED`; model tidak ditemukan → 404; timeout (`AI_TIMEOUT_MS`,
-  bawaan 10.000 ms) → 504. Kegagalan tidak pernah diganti hasil palsu dan tidak
+  `AI_NOT_CONFIGURED`; model tidak ditemukan -> 404; timeout (`AI_TIMEOUT_MS`,
+  bawaan 10.000 ms) -> 504. Kegagalan tidak pernah diganti hasil palsu dan tidak
   disimpan sebagai analisis sah.
 - **Privasi:** teks hanya dikirim setelah pengguna mencentang persetujuan
   (`ai_consent: true`). Tanpa itu, server menolak dengan 400
@@ -131,24 +131,24 @@ keputusan yang diambil dan alasannya. Tag `(D1)` … `(D9)` dirujuk dari kode.
 - **Ditunda:** Ollama/Qwen3.5 adalah provider tambahan di balik antarmuka
   provider yang sama; belum diimplementasikan pada tahap ini.
 
-## D11 — Retensi dokumen 30 hari
+## D11 - Retensi dokumen 30 hari
 
 - **Keputusan:** `documents.expires_at` = analisis terakhir + 30 hari, dengan job
   berkala `cleanupExpiredDocuments()` tiap 6 jam (`services/retention.js`).
   Penghapusan otomatis ini tetap berjalan di atas adapter memori; validasi
   kepemilikan dokumen tetap berlaku untuk setiap operasi.
 
-## D12 — Similarity dan Penggunaan AI (di luar SRS awal)
+## D12 - Similarity dan Penggunaan AI (di luar SRS awal)
 
 - **Konteks:** SRS/SDD awal melarang skor AI dan pemeriksaan kemiripan. Pemilik
   produk meminta keduanya ditambahkan dan menyatakan akan menyesuaikan dokumen
   SRS/SDD sendiri. Keputusan ini mencatat bentuk implementasinya, bukan sebagai
   fitur resmi SRS.
 - **Keputusan:** `computeScores()` di `services/stats.js` menghitung dua angka
-  0–100 secara deterministik dari teks (tidak ada panggilan model):
-  - **Similarity** — seberapa sering teks mengulang kata isi, frasa, dan
+  0-100 secara deterministik dari teks (tidak ada panggilan model):
+  - **Similarity** - seberapa sering teks mengulang kata isi, frasa, dan
     pembuka kalimatnya sendiri (bobot 0,5 / 0,3 / 0,2).
-  - **Penggunaan AI** — keseragaman panjang kalimat
+  - **Penggunaan AI** - keseragaman panjang kalimat
     (`sentence_length_variation / avg_sentence_length`), pembuka berulang, frasa
     berulang, dan tidak adanya kalimat pendek (bobot 0,35 / 0,25 / 0,2 / 0,2).
 - **Label di UI (permintaan pemilik produk, di luar SRS):** kedua angka tampil
@@ -156,9 +156,58 @@ keputusan yang diambil dan alasannya. Tag `(D1)` … `(D9)` dirujuk dari kode.
   "perkiraan". Teks penjelas di UI memakai definisi umum similarity (kesamaan
   teks dengan teks lain di basis data, seperti Turnitin Similarity). Perlu
   dicatat jujur di dokumen: yang benar-benar dihitung implementasi ini adalah
-  pengulangan **di dalam teks itu sendiri** — tidak ada basis data pembanding,
+  pengulangan **di dalam teks itu sendiri** - tidak ada basis data pembanding,
   jadi angkanya bukan hasil pemeriksaan plagiarisme. Batas ini ada di komentar
   `computeScores()`.
 - **Hasil disimpan** di `analysis.stats.scores` sehingga ikut terbaca ulang lewat
   `GET /api/documents/:id` dan ditampilkan panel "Skor kemiripan & AI" di
   `views/ResultView.vue`. Bukan kategori ketujuh (tidak menyentuh warna/kategori SRS).
+
+## D9b - Mode simulasi pembayaran QRIS (permintaan lanjutan)
+
+- **Temuan:** dengan kredensial Midtrans kosong, alur QRIS tidak bisa dilihat sama sekali:
+  tombol bayar disembunyikan dan `POST /api/payments` menjawab 503.
+- **Keputusan:** bila `MIDTRANS_SERVER_KEY` kosong (atau `MIDTRANS_SIMULATE=true`), pembayaran
+  berjalan di **mode simulasi** - transaksi dibuat di memori, kode QR digambar server sebagai
+  SVG lokal (bukan QRIS asli, tidak bisa dipindai), dan tombol "Periksa status" menandai lunas
+  lewat `syncOutcome` yang sama sehingga premium tidak pernah digandakan.
+- **Tarif:** `PREMIUM_PRICE_IDR` tetap prioritas; bila kosong, mode simulasi memakai
+  `PREMIUM_DEMO_PRICE_IDR` (bawaan 25000) dan UI menandainya "tarif simulasi".
+- **Batas jujur:** tidak ada uang berpindah, tidak ada panggilan Midtrans. Webhook
+  `/api/payments/notify` tetap menjawab 503 tanpa server key, jadi tidak ada jalur verifikasi
+  palsu. Jalur Midtrans asli (D9) tidak berubah saat kredensial diisi.
+- **Status:** hanya untuk demo/pengembangan - bukan alur pembayaran produksi. Data tetap
+  hilang saat server dimulai ulang.
+
+## D13 - Pembayaran dinonaktifkan (menggantikan D9 dan D9b)
+
+- **Konteks:** pemilik produk meminta pembayaran dan halaman Premium menjadi
+  **tampilan saja** - fungsi internalnya dihapus dan tidak ada tombol yang bisa
+  diklik untuk membeli.
+- **Keputusan:** seluruh handler Midtrans (charge QRIS, proxy gambar QR,
+  pemeriksaan status, webhook, penyusunan signature) dihapus. Semua endpoint
+  `/api/payments*` kini dijaga `routes/payments.js` yang hanya menjawab **501
+  `PAYMENTS_DISABLED`**. Repository `payments`, konfigurasi `MIDTRANS_*`,
+  `MIDTRANS_SIMULATE`, dan tarif simulasi ikut dihapus.
+- **Harga:** ditetapkan `PREMIUM_PRICE_IDR=49000` (30 hari) dan ditampilkan
+  seragam di halaman Premium serta footer website. Karena tidak ada transaksi,
+  nilai ini murni tampilan; `GET /api/health` melaporkan
+  `premium.available = false`.
+- **Batas jujur:** tidak ada jalur HTTP apa pun yang bisa mengaktifkan Premium.
+  `users.extendPremium()` hanya bisa dipanggil langsung dari kode (operator atau
+  pengujian), bukan dari permintaan klien.
+
+## D14 - Akun & sesi bisa disimpan di PostgreSQL
+
+- **Konteks:** permintaan agar daftar dan masuk memakai PostgreSQL lokal.
+- **Keputusan:** `repositories/postgres.js` menyediakan adapter `users` dan
+  `refresh_tokens` di atas `pg` (pool kecil, skema dibuat otomatis dengan
+  `create table if not exists` saat startup). `repositories/index.js` mengekspor
+  `initStorage()`: bila `DATABASE_URL` diisi dan database terjangkau, adapter
+  PostgreSQL dipakai; bila tidak, server tetap jalan dengan adapter memori dan
+  alasannya dilaporkan lewat log serta `health.storage` - bukan gagal senyap.
+- **Yang belum dipindah:** dokumen, hasil analisis, dan saran masih di memori.
+  Batas ini disebutkan pada `health.storage` dan README.
+- **Catatan keamanan:** nilai kolom yang boleh diubah lewat `users.update()`
+  dibatasi daftar putih (`USER_COLUMNS`) supaya nama kolom dari luar tidak pernah
+  masuk ke SQL; seluruh nilai dikirim sebagai parameter, bukan disisipkan ke string.

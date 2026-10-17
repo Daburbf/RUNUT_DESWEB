@@ -66,7 +66,7 @@ export function validateAiIssues(parsed, originalText, { maxIssues = 30 } = {}) 
       continue;
     }
     if (typeof text !== 'string' || !text.length || originalText.slice(start, end) !== text) {
-      errors.push(`${where}: kutipan "text" tidak cocok dengan teks pada rentang ${start}–${end}.`);
+      errors.push(`${where}: kutipan "text" tidak cocok dengan teks pada rentang ${start}-${end}.`);
       continue;
     }
     if (typeof explanation !== 'string' || !explanation.trim()) {
@@ -100,7 +100,7 @@ export function validateAiIssues(parsed, originalText, { maxIssues = 30 } = {}) 
 }
 
 // Pemeringkatan bukti (docs/KEPUTUSAN_TEKNIS.md, D4). Bukan skor keyakinan
-// model dan bukan persentase kualitas tulisan — hanya bukti yang bisa
+// model dan bukan persentase kualitas tulisan - hanya bukti yang bisa
 // diperiksa ulang pada teks:
 //   kemunculan kutipan di seluruh dokumen  -> bobot 3 per kemunculan tambahan
 //   penyebaran pada paragraf berbeda       -> bobot 2 per paragraf tambahan

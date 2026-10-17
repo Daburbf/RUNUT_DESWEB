@@ -27,11 +27,11 @@ const plans = [
 ]
 
 const faqs = [
-  { q: 'Apakah Runut mendeteksi tulisan AI atau plagiarisme?', a: 'Runut menampilkan dua angka yang dihitung server dari teksmu, bukan keluaran model AI: Similarity (tingkat kesamaan pola di dalam teks — pengulangan kata isi, frasa, dan pembuka kalimat) dan Penggunaan AI (keseragaman panjang kalimat, pengulangan frasa, jumlah kalimat pendek).' },
-  { q: 'Apakah saran diterapkan otomatis?', a: 'Tidak. Semua keputusan ada di tangan kamu — terima, tolak, atau pulihkan teks asli. Saran yang berisiko mengubah makna ditandai "perlu cek manual".' },
+  { q: 'Apakah Runut mendeteksi tulisan AI atau plagiarisme?', a: 'Runut menampilkan dua angka yang dihitung server dari teksmu, bukan keluaran model AI: Similarity (tingkat kesamaan pola di dalam teks - pengulangan kata isi, frasa, dan pembuka kalimat) dan Penggunaan AI (keseragaman panjang kalimat, pengulangan frasa, jumlah kalimat pendek).' },
+  { q: 'Apakah saran diterapkan otomatis?', a: 'Tidak. Semua keputusan ada di tangan kamu - terima, tolak, atau pulihkan teks asli. Saran yang berisiko mengubah makna ditandai "perlu cek manual".' },
   { q: 'Berapa lama dokumen tersimpan?', a: '30 hari setelah analisis terakhir, atau sampai kamu menghapusnya dari riwayat. Setelah itu dihapus permanen.' },
   { q: 'Apakah teks saya dibagikan ke pihak lain?', a: 'Tidak. Teks hanya dikirim ke provider AI yang dikonfigurasi server untuk keperluan analisis, dan tidak dipakai untuk hal lain.' },
-  { q: 'Bagaimana cara aktif Premium?', a: 'Bayar lewat Midtrans di halaman Premium. Status Premium aktif otomatis setelah pembayaran terverifikasi oleh server.' },
+  { q: 'Bagaimana cara aktif Premium?', a: 'Paket dan metode pembayaran ditampilkan di halaman Premium (Rp49.000 / 30 hari). Pembayaran belum dibuka, jadi akun Premium belum bisa diaktifkan.' },
 ]
 </script>
 
@@ -39,14 +39,14 @@ const faqs = [
   <div>
     <!-- 01 / APA ITU RUNUT -->
     <section class="mx-auto max-w-6xl px-4 py-12 sm:px-6 md:py-16">
-      <SectionLabel>01 / Tentang aplikasi</SectionLabel>
+      <SectionLabel>01 / Tentang website</SectionLabel>
       <h1 class="mt-4 max-w-3xl text-5xl font-black uppercase leading-[0.9] tracking-tighter md:text-7xl">
         Runut itu apa?
       </h1>
       <div class="mt-8 grid gap-8 md:grid-cols-[7fr_5fr]">
         <div class="space-y-5 text-[15px] leading-8 text-black/80">
           <p>
-            <strong>Runut adalah aplikasi web untuk menganalisis dan memperbaiki pola tulisan
+            <strong>Runut adalah website untuk menganalisis dan memperbaiki pola tulisan
             berbahasa Indonesia.</strong> Kamu menempelkan teks atau mengunggah dokumen,
             Runut menandai bagian yang bermasalah, menjelaskan sebabnya, dan memberi saran
             perbaikan yang bisa diterima satu per satu.
@@ -59,7 +59,7 @@ const faqs = [
           </p>
           <BaseCard class="border-l-4 !border-l-[#FF3000] p-5">
             <p class="font-mono text-xs uppercase tracking-widest text-[#FF3000]">Prinsip</p>
-            <p class="mt-2 text-sm leading-7">Spesifik terhadap tulisanmu, berbahasa Indonesia yang wajar, dan jujur soal batasnya — tidak ada skor rekaan atau klaim berlebihan.</p>
+            <p class="mt-2 text-sm leading-7">Spesifik terhadap tulisanmu, berbahasa Indonesia yang wajar, dan jujur soal batasnya - tidak ada skor rekaan atau klaim berlebihan.</p>
           </BaseCard>
           <div class="flex flex-wrap gap-2 pt-2">
             <BaseButton to="/analisis">Coba analisis</BaseButton>
@@ -81,13 +81,13 @@ const faqs = [
     <!-- 02 / FITUR -->
     <section class="border-y-4 border-black bg-[#F2F2F2]">
       <div class="mx-auto max-w-6xl px-4 py-12 sm:px-6 md:py-16">
-        <SectionLabel>02 / Fitur aplikasi</SectionLabel>
+        <SectionLabel>02 / Fitur website</SectionLabel>
         <h2 class="mt-4 text-4xl font-black uppercase tracking-tighter md:text-5xl">Semua yang bisa dilakukan Runut</h2>
         <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <FeatureCard v-for="k in keys" :key="k" :icon="CATEGORIES[k].icon" :title="CATEGORIES[k].label" :desc="desc[k]" :num="CATEGORIES[k].num" />
         </div>
         <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <FeatureCard icon="fa-file-arrow-up" title="Upload Dokumen" desc="TXT, DOCX, atau PDF sampai 5 MB — teks diekstrak otomatis lalu dianalisis." num="07" />
+          <FeatureCard icon="fa-file-arrow-up" title="Upload Dokumen" desc="TXT, DOCX, atau PDF sampai 5 MB - teks diekstrak otomatis lalu dianalisis." num="07" />
           <FeatureCard icon="fa-code-compare" title="Bandingkan & Pulihkan" desc="Lihat teks asli berdampingan dengan revisi, atau kembalikan semuanya sekaligus." num="08" />
           <FeatureCard icon="fa-clock-rotate-left" title="Riwayat 30 Hari" desc="Semua dokumen tersimpan otomatis. Cari, buka lagi, unduh ulang, atau hapus." num="09" />
         </div>

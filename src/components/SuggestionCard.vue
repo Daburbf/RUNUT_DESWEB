@@ -17,7 +17,7 @@ const color = CATEGORIES[key].color
     </div>
     <p class="text-sm">{{ issue.explanation }}</p>
     <div class="mt-3 space-y-1.5 border-t-2 pt-3 text-sm" :class="selected ? 'border-white/30' : 'border-black/10'">
-      <p class="font-mono text-xs" :class="selected ? 'text-white/80' : 'text-black/60'">Kutipan: “{{ issue.snippet }}”</p>
+      <p class="break-words font-mono text-xs" :class="selected ? 'text-white/80' : 'text-black/60'">Kutipan: "{{ issue.snippet }}"</p>
       <p class="border-2 px-2 py-1 font-medium" :class="selected ? 'border-white bg-white text-black' : 'border-black bg-black text-white'">{{ issue.suggestion }}</p>
     </div>
     <div class="mt-4 flex flex-wrap gap-2">

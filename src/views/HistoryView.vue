@@ -63,7 +63,7 @@ onMounted(load)
       </div>
       <div class="relative">
         <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-sm"></i>
-        <input v-model="q" @input="onSearch" placeholder="CARI JUDUL…" class="h-12 w-full border-2 border-black bg-white pl-11 pr-3 text-sm font-bold uppercase tracking-wide placeholder:text-black/30 focus:border-[#FF3000] focus:outline-none" />
+        <input v-model="q" @input="onSearch" placeholder="CARI JUDUL..." class="h-12 w-full border-2 border-black bg-white pl-11 pr-3 text-sm font-bold uppercase tracking-wide placeholder:text-black/30 focus:border-[#FF3000] focus:outline-none" />
       </div>
     </div>
 
@@ -72,7 +72,7 @@ onMounted(load)
     </p>
     <p v-if="error" class="mt-6 border-2 border-black bg-black px-4 py-3 text-sm font-bold uppercase tracking-wide text-white"><span class="text-[#FF3000]">■</span> {{ error }}</p>
 
-    <div v-if="loading" class="mt-8 border-4 border-black bg-[#F2F2F2] p-10 text-center font-mono text-sm uppercase tracking-widest"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Memuat riwayat…</div>
+    <div v-if="loading" class="mt-8 border-4 border-black bg-[#F2F2F2] p-10 text-center font-mono text-sm uppercase tracking-widest"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Memuat riwayat...</div>
 
     <template v-else>
       <div v-if="filtered.length" class="mt-8">
@@ -108,7 +108,7 @@ onMounted(load)
     </template>
 
     <BaseModal :open="!!target" title="Hapus ini?" @close="target = null">
-      <p class="border-l-4 border-[#FF3000] bg-[#F2F2F2] p-4 text-sm">“{{ target?.title }}” akan dihapus permanen dan tidak bisa dipulihkan.</p>
+      <p class="border-l-4 border-[#FF3000] bg-[#F2F2F2] p-4 text-sm">"{{ target?.title }}" akan dihapus permanen dan tidak bisa dipulihkan.</p>
       <div class="mt-6 flex justify-end gap-2">
         <BaseButton variant="secondary" size="sm" @click="target = null">Batal</BaseButton>
         <BaseButton variant="accent" size="sm" @click="removeIds([target.id])">Hapus</BaseButton>

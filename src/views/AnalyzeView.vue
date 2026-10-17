@@ -42,7 +42,9 @@ async function run() {
       data = await api('/api/analysis', { method: 'POST', body: { text: text.value, title: title.value.trim() || 'Dokumen tanpa judul', ai_consent: true } })
     }
     documents.setCurrent(data)
-    router.push('/hasil')
+    // Sertakan id dokumen di URL supaya halaman hasil bisa memuat ulang dari
+    // server (tab baru/refresh) tanpa bergantung pada sessionStorage.
+    router.push({ name: 'result', params: { id: data.document.id } })
   } catch (e) {
     error.value = e.message || 'Analisis gagal. Coba lagi.'
   } finally {
@@ -85,7 +87,7 @@ function onFile(e) {
         <div class="border-b-2 border-black p-4 sm:p-6">
           <input v-model="title" placeholder="JUDUL DOKUMEN" class="w-full bg-transparent text-xl font-black uppercase tracking-tight placeholder:text-black/30 focus:outline-none" />
         </div>
-        <textarea v-model="text" rows="14" placeholder="Tulis atau tempel teks di sini…"
+        <textarea v-model="text" rows="14" placeholder="Tulis atau tempel teks di sini..."
           class="w-full flex-1 resize-y bg-transparent p-4 text-[15px] leading-7 focus:outline-none sm:p-6"></textarea>
         <p v-if="file" class="border-t-2 border-black bg-[#F2F2F2] px-4 py-2 font-mono text-xs uppercase tracking-widest sm:px-6">File: {{ file.name }} ({{ (file.size / 1024).toFixed(0) }} KB) <button class="ml-2 underline" @click="file = null">batal</button></p>
         <div class="flex flex-col gap-3 border-t-2 border-black p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
@@ -100,14 +102,14 @@ function onFile(e) {
             <span :class="['font-mono text-xs font-bold', words > limit ? 'bg-[#FF3000] px-2 py-1 text-white' : '']">{{ words }} / {{ limit }} kata</span>
             <BaseButton :disabled="loading" @click="run">
               <i :class="['fa-solid', loading ? 'fa-circle-notch fa-spin' : 'fa-wand-magic-sparkles']"></i>
-              {{ loading ? `Memeriksa… ${elapsed} dtk` : 'Cek tulisan' }}
+              {{ loading ? `Memeriksa... ${elapsed} dtk` : 'Cek tulisan' }}
             </BaseButton>
           </div>
         </div>
 
         <!-- Muncul hanya saat proses berjalan: teks dikirim ke layanan AI lewat server. -->
         <p v-if="loading" class="border-t-2 border-black bg-[#F2F2F2] px-4 py-3 font-mono text-xs uppercase tracking-widest text-black/60 sm:px-6">
-          Teks sedang dikirim ke layanan AI yang dikonfigurasi server. Biasanya selesai dalam 1 menit — biarkan halaman ini terbuka.
+          Teks sedang dikirim ke layanan AI yang dikonfigurasi server. Biasanya selesai dalam 1 menit - biarkan halaman ini terbuka.
         </p>
 
         <div v-if="error" class="border-t-2 border-black bg-black px-4 py-3 sm:px-6">

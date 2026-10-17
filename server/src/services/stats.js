@@ -68,7 +68,7 @@ function wordFreq(text) {
     .sort((a, b) => b.count - a.count || a.word.localeCompare(b.word));
 }
 
-// Frekuensi frasa (2–3 kata) yang benar-benar berulang. Frasa yang seluruh
+// Frekuensi frasa (2-3 kata) yang benar-benar berulang. Frasa yang seluruh
 // katanya kata umum dilewati karena pengulangannya wajar.
 function phraseFreq(text, n) {
   const words = [...text.toLowerCase().matchAll(WORD_RE)].map((m) => m[0]);
@@ -85,7 +85,7 @@ function phraseFreq(text, n) {
     .sort((a, b) => b.count - a.count || b.words - a.words);
 }
 
-// Pembukaan kalimat yang berulang — bahan bukti pola kalimat/struktur seragam.
+// Pembukaan kalimat yang berulang - bahan bukti pola kalimat/struktur seragam.
 function repeatedOpenings(sentences, size = 3) {
   const freq = new Map();
   for (const s of sentences) {
@@ -101,7 +101,7 @@ function repeatedOpenings(sentences, size = 3) {
     .slice(0, 5);
 }
 
-// Statistik deterministik — angka yang ditampilkan selalu dihitung program,
+// Statistik deterministik - angka yang ditampilkan selalu dihitung program,
 // bukan berasal dari perkiraan model. Normalisasi hanya untuk penghitungan;
 // teks yang disunting pengguna tidak pernah diubah.
 export function computeStats(text) {
@@ -137,7 +137,7 @@ export function computeStats(text) {
 // pemeriksaan plagiarisme butuh korpus pembanding yang belum ada; tambahkan
 // adapter korpus bila nanti ada sumbernya.
 // Sinyal disetel pada rentang prosa Indonesia biasa, jadi angka ini perkiraan
-// kasar berskala 0–100 — dipakai sebagai penunjuk arah, bukan bukti.
+// kasar berskala 0-100 - dipakai sebagai penunjuk arah, bukan bukti.
 const clamp01 = (n) => Math.max(0, Math.min(1, Number.isFinite(n) ? n : 0));
 const pct = (n) => Math.round(clamp01(n) * 100);
 

@@ -14,8 +14,9 @@ import {
   listDocuments, getDocument, decideIssues, restoreOriginal, renameDocument,
   deleteDocuments, downloadDocument,
 } from './routes/documents.js';
-import { createPayment, listPayments, midtransNotify, paymentQr, paymentStatus } from './routes/payments.js';
+import { paymentsDisabled } from './routes/payments.js';
 import { startRetentionJob } from './services/retention.js';
+import { initStorage, storage } from './repositories/index.js';
 import { getProviderInfo } from './services/aiProvider.js';
 
 export function createApp() {
@@ -57,9 +58,15 @@ export function createApp() {
     const ai = getProviderInfo();
     res.json({
       ok: true,
-      storage: config.storage,
+      storage: storage.detail,
       ai: { provider: ai.provider, model: ai.model || null, configured: ai.configured, timeout_ms: ai.timeoutMs },
-      premium: { price_idr: config.premium.priceIdr, duration_days: config.premium.durationDays, configured: Boolean(config.premium.priceIdr && config.midtrans.serverKey) },
+      premium: {
+        price_idr: config.premium.priceIdr,
+        duration_days: config.premium.durationDays,
+        // Pembayaran belum dibuka: paket dan metode hanya ditampilkan sebagai
+        // gambaran di halaman Premium. Tidak ada transaksi yang bisa dibuat.
+        available: false,
+      },
       mail_configured: config.mail.configured,
       limits: { free_words: FREE_WORD_LIMIT, premium_words: PREMIUM_WORD_LIMIT, free_shown_issues: 3 },
     });
@@ -87,23 +94,25 @@ export function createApp() {
   app.post('/api/documents/:id/restore', requireAuth, restoreOriginal);
   app.patch('/api/documents/:id/title', requireAuth, renameDocument);
 
-  // ---- Pembayaran (FR-07) ----
-  app.post('/api/payments', requireAuth, createPayment);
-  app.get('/api/payments', requireAuth, listPayments);
-  app.get('/api/payments/:orderId/qr', requireAuth, paymentQr);
-  app.get('/api/payments/:orderId/status', requireAuth, paymentStatus);
-  app.post('/api/payments/notify', express.json({ limit: '100kb' }), midtransNotify);
+  // ---- Pembayaran (FR-07) - belum dibuka, hanya tampilan di halaman Premium ----
+  app.post('/api/payments', requireAuth, paymentsDisabled);
+  app.get('/api/payments', requireAuth, paymentsDisabled);
+  app.get('/api/payments/:orderId/qr', requireAuth, paymentsDisabled);
+  app.get('/api/payments/:orderId/status', requireAuth, paymentsDisabled);
+  app.post('/api/payments/notify', paymentsDisabled);
 
   app.use('/api', notFound);
   app.use(errorHandler);
   return app;
 }
 
-export function start() {
+export async function start() {
   for (const problem of checkStartupConfig()) console.warn('[config] ' + problem);
+  const info = await initStorage();
+  console.log(`[runut] penyimpanan: ${info.detail}`);
   const app = createApp();
   startRetentionJob();
   return app.listen(config.port, () => {
-    console.log(`[runut] API berjalan di http://localhost:${config.port} — penyimpanan: ${config.storage}`);
+    console.log(`[runut] API berjalan di http://localhost:${config.port}`);
   });
 }

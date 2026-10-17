@@ -10,7 +10,7 @@ const routes = [
   { path: '/lupa-sandi', name: 'forgot', component: () => import('../views/ForgotPasswordView.vue'), meta: { guest: true } },
   { path: '/atur-ulang', name: 'reset', component: () => import('../views/ResetPasswordView.vue'), meta: { guest: true } },
   { path: '/analisis', name: 'analyze', component: () => import('../views/AnalyzeView.vue'), meta: { auth: true } },
-  { path: '/hasil', name: 'result', component: () => import('../views/ResultView.vue'), meta: { auth: true } },
+  { path: '/hasil/:id?', name: 'result', component: () => import('../views/ResultView.vue'), meta: { auth: true } },
   { path: '/bandingkan/:id?', name: 'compare', component: () => import('../views/CompareView.vue'), meta: { auth: true } },
   { path: '/dokumen/:id', name: 'document-detail', component: () => import('../views/DocumentDetailView.vue'), meta: { auth: true } },
   { path: '/riwayat', name: 'history', component: () => import('../views/HistoryView.vue'), meta: { auth: true } },
@@ -29,7 +29,7 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   // `!session.access` menangkap keadaan sisa: sudah masuk tapi token hilang
-  // (mis. refresh gagal/kedaluwarsa) — pulihkan sebelum halaman meminta data.
+  // (mis. refresh gagal/kedaluwarsa) - pulihkan sebelum halaman meminta data.
   if (!auth.ready || (auth.user && !session.access)) { try { await auth.init() } catch { /* abaikan */ } }
   if (to.meta.auth && !auth.user) return { name: 'login', query: { redirect: to.fullPath } }
   if (to.meta.guest && auth.user) return { name: 'analyze' }

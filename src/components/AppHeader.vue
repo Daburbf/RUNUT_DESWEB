@@ -5,6 +5,9 @@ import { auth } from '../store/auth'
 
 const open = ref(false)
 const router = useRouter()
+// BASE_URL ikut nilai `base` Vite ('./') supaya logo tetap benar di root
+// maupun subpath tanpa mengubah konfigurasi hosting.
+const logo = import.meta.env.BASE_URL + 'images/logo.svg'
 
 function logout() {
   auth.logout().finally(() => router.push('/'))
@@ -16,15 +19,16 @@ function logout() {
     <div class="h-2 bg-black" aria-hidden="true"></div>
     <nav class="mx-auto flex h-16 max-w-6xl items-center justify-between border-b-4 border-black px-4 sm:px-6" aria-label="Navigasi utama">
       <router-link to="/" class="flex items-center gap-2.5">
-        <span class="flex h-8 w-8 items-center justify-center bg-black font-mono text-sm font-black text-white">R</span>
+        <img :src="logo" alt="" class="h-8 w-8" />
         <span class="text-lg font-black uppercase tracking-tighter">Runut</span>
       </router-link>
 
       <ul class="hidden items-center gap-7 md:flex">
         <li><router-link to="/" class="swiss-nav-link text-xs font-bold uppercase tracking-widest" exact-active-class="!text-[#FF3000]"><span data-label="Beranda">Beranda</span></router-link></li>
-        <li><router-link to="/tentang" class="swiss-nav-link text-xs font-bold uppercase tracking-widest" exact-active-class="!text-[#FF3000]"><span data-label="Tentang Aplikasi">Tentang Aplikasi</span></router-link></li>
+        <li><router-link to="/tentang" class="swiss-nav-link text-xs font-bold uppercase tracking-widest" exact-active-class="!text-[#FF3000]"><span data-label="Tentang">Tentang</span></router-link></li>
         <li><router-link to="/analisis" class="swiss-nav-link text-xs font-bold uppercase tracking-widest" exact-active-class="!text-[#FF3000]"><span data-label="Analisis">Analisis</span></router-link></li>
         <li><router-link to="/riwayat" class="swiss-nav-link text-xs font-bold uppercase tracking-widest" exact-active-class="!text-[#FF3000]"><span data-label="Riwayat">Riwayat</span></router-link></li>
+        <li><router-link to="/premium" class="swiss-nav-link text-xs font-bold uppercase tracking-widest" exact-active-class="!text-[#FF3000]"><span data-label="Premium">Premium</span></router-link></li>
       </ul>
 
       <div class="hidden items-center gap-3 md:flex">
@@ -49,7 +53,7 @@ function logout() {
     <transition name="fade">
       <div v-if="open" class="border-b-4 border-black bg-white px-4 py-4 md:hidden">
         <router-link to="/" class="flex items-center justify-between border-b-2 border-black/10 px-2 py-4 text-sm font-black uppercase tracking-wide hover:bg-[#F2F2F2] hover:text-[#FF3000]"><span>Beranda</span><span class="font-mono text-xs text-[#FF3000]">01</span></router-link>
-        <router-link to="/tentang" class="flex items-center justify-between border-b-2 border-black/10 px-2 py-4 text-sm font-black uppercase tracking-wide hover:bg-[#F2F2F2] hover:text-[#FF3000]"><span>Tentang Aplikasi</span><span class="font-mono text-xs text-[#FF3000]">02</span></router-link>
+        <router-link to="/tentang" class="flex items-center justify-between border-b-2 border-black/10 px-2 py-4 text-sm font-black uppercase tracking-wide hover:bg-[#F2F2F2] hover:text-[#FF3000]"><span>Tentang</span><span class="font-mono text-xs text-[#FF3000]">02</span></router-link>
         <router-link to="/analisis" class="flex items-center justify-between border-b-2 border-black/10 px-2 py-4 text-sm font-black uppercase tracking-wide hover:bg-[#F2F2F2] hover:text-[#FF3000]"><span>Analisis</span><span class="font-mono text-xs text-[#FF3000]">03</span></router-link>
         <router-link to="/riwayat" class="flex items-center justify-between border-b-2 border-black/10 px-2 py-4 text-sm font-black uppercase tracking-wide hover:bg-[#F2F2F2] hover:text-[#FF3000]"><span>Riwayat</span><span class="font-mono text-xs text-[#FF3000]">04</span></router-link>
         <router-link to="/premium" class="flex items-center justify-between border-b-2 border-black/10 px-2 py-4 text-sm font-black uppercase tracking-wide hover:bg-[#F2F2F2] hover:text-[#FF3000]"><span>Premium</span><span class="font-mono text-xs text-[#FF3000]">05</span></router-link>
