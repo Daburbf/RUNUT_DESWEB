@@ -13,11 +13,14 @@ const desc = {
   style_consistency: 'Campuran kata ganti atau gaya (mis. "saya" vs "aku") diingatkan.',
 }
 const steps = [
-  { n: '01', t: 'Tempel tulisan', d: 'Tempel teks atau unggah TXT/DOCX/PDF (maks 5 MB). Gratis sampai 500 kata, Premium sampai 10.000 kata.' },
+  { n: '01', t: 'Tempel tulisan', d: 'Tempel teks atau unggah TXT/DOCX/PDF (maks 5 MB). Gratis sampai 500 kata, Premium tanpa batas kata.' },
   { n: '02', t: 'Lihat yang ditandai', d: 'Bagian bermasalah digarisbawahi sesuai kategorinya. Klik untuk melihat penjelasan dan saran.' },
   { n: '03', t: 'Selesaikan satu per satu', d: 'Terima, tolak, terima semua yang aman, atau pulihkan teks asli. Premium membuka semua saran.' },
 ]
 const keys = Object.keys(CATEGORIES)
+// Sama seperti logo di AppHeader: pakai BASE_URL supaya berkas di public/ tetap
+// ditemukan, baik di root maupun di subfolder (base: './').
+const heroImage = import.meta.env.BASE_URL + 'images/yunani.png'
 </script>
 
 <template>
@@ -44,6 +47,12 @@ const keys = Object.keys(CATEGORIES)
           </div>
         </div>
         <div class="relative hidden min-h-[480px] overflow-hidden border-l-4 border-black bg-[#F2F2F2] md:flex" aria-hidden="true">
+          <!-- Berkas ada di public/images/yunani.png, alamatnya dihitung di script. -->
+          <img
+            :src="heroImage"
+            alt=""
+            class="absolute inset-0 h-full w-full object-cover"
+          />
           <div class="swiss-diagonal absolute inset-0"></div>
           <p class="absolute bottom-8 left-8 right-8 border-2 border-black bg-white p-4 font-mono text-xs uppercase tracking-widest">Tempel -> tandai -> perbaiki -> unduh</p>
         </div>

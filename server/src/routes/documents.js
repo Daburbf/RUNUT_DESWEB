@@ -184,7 +184,18 @@ export const downloadDocument = asyncHandler(async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${safe}-revisi.docx"`);
     return res.send(buf);
   }
-  if (format !== 'txt') throw new HttpError(400, 'Format unduhan hanya "txt" atau "docx".');
+  if (format === 'pdf') {
+    const { buildPdf } = await import('../services/pdf.js');
+    const pdf = await buildPdf({
+      title: doc.title || 'Hasil revisi Runut',
+      meta: `Direvisi dengan Runut - ${countWords(text)} kata - ${new Date().toLocaleDateString('id-ID', { dateStyle: 'long' })}`,
+      body: text,
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${safe}-revisi.pdf"`);
+    return res.send(pdf);
+  }
+  if (format !== 'txt') throw new HttpError(400, 'Format unduhan hanya "pdf", "docx", atau "txt".');
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${safe}-revisi.txt"`);
   res.send(text);

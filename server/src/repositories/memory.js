@@ -22,6 +22,7 @@ export function createMemoryRepositories() {
     analyses: [],
     issues: [],
     refresh_tokens: [],
+    payments: [],
   };
 
   const insert = (table, row) => {
@@ -183,5 +184,39 @@ export function createMemoryRepositories() {
     },
   };
 
-  return { users, refreshTokens, documents, analyses, issues };
+  // Transaksi pembayaran. Idempotensi premium bergantung pada
+  // markPaidIfPending(): hanya transisi pertama ke 'paid' yang mengembalikan
+  // baris, sehingga notifikasi berulang tidak pernah menggandakan masa aktif.
+  const payments = {
+    async create(row) {
+      return insert('payments', { updated_at: now(), ...row });
+    },
+    async findById(id) {
+      return clone(tables.payments.find((p) => p.id === id));
+    },
+    async findByOrderId(order_id) {
+      return clone(tables.payments.find((p) => p.order_id === order_id));
+    },
+    async listByUser(user_id, { limit = 30 } = {}) {
+      return tables.payments
+        .filter((p) => p.user_id === user_id)
+        .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+        .slice(0, limit)
+        .map(clone);
+    },
+    async update(id, patch) {
+      const row = tables.payments.find((p) => p.id === id);
+      if (!row) return null;
+      Object.assign(row, patch, { updated_at: now() });
+      return clone(row);
+    },
+    async markPaidIfPending(id, patch) {
+      const row = tables.payments.find((p) => p.id === id);
+      if (!row || row.status === 'paid') return null;
+      Object.assign(row, patch, { status: 'paid', updated_at: now() });
+      return clone(row);
+    },
+  };
+
+  return { users, refreshTokens, documents, analyses, issues, payments };
 }

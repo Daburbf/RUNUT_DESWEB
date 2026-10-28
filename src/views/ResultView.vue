@@ -35,7 +35,12 @@ async function hydrate() {
     loading.value = false
   }
 }
-onMounted(hydrate)
+onMounted(async () => {
+  await hydrate()
+  // Premium: laporan langsung diperbaiki otomatis setelah analisis, sesuai
+  // alur "tempel laporan -> teks diperbaiki -> unduh".
+  if (isPremium.value && doc.value && !hasFix.value) autoFix()
+})
 
 const filter = ref(null)
 const selected = ref(null)
@@ -60,6 +65,8 @@ const summary = computed(() => {
   return [...map.entries()].map(([type, count]) => ({ type, count }))
 })
 const scores = computed(() => stats.value.scores || {})
+const isPremium = computed(() => Boolean(draft.value?.meta?.is_premium ?? auth.user?.is_premium))
+const hasFix = computed(() => Boolean(revised.value) && revised.value !== (doc.value?.original_text || ''))
 const scoresList = computed(() => ['similarity', 'ai_usage']
   .map((key) => ({ key, ...(scores.value[key] || {}) }))
   .filter((m) => Number.isFinite(m.percent)))
@@ -99,6 +106,33 @@ function acceptAll() {
   if (!confirm('Terapkan semua saran yang aman sekaligus? Saran yang perlu cek manual dilewati.')) return
   sendDecision({ accept_all: true }, 'Semua saran aman diterapkan.')
 }
+
+// Perbaikan otomatis: menerapkan semua saran yang lolos validasi. Saran yang
+// ditandai perlu cek manual tetap dilewati agar makna tulisan tidak berubah.
+const fixing = ref(false)
+async function autoFix(manual = false) {
+  if (!isPremium.value || fixing.value || busy.value) return
+  if (!issues.value.some((i) => statusOf(i) === 'active' && !i.needs_manual_review)) {
+    if (manual) fail('Tidak ada saran yang bisa diterapkan otomatis.')
+    return
+  }
+  fixing.value = true
+  try {
+    const res = await documents.decide(doc.value.id, { accept_all: true })
+    sync({
+      ...draft.value,
+      issues: res.issues,
+      revised_text: res.revised_text,
+      document: { ...doc.value, revised_text: res.revised_text, status: res.document?.status || doc.value.status },
+    })
+    if (manual) say('Semua saran aman diterapkan. Laporan siap diunduh.')
+  } catch (e) {
+    if (e.status === 403) fail('Perbaikan otomatis khusus Premium. Buka halaman Premium untuk mengaktifkannya.')
+    else fail(e.message || 'Gagal menerapkan saran.')
+  } finally {
+    fixing.value = false
+  }
+}
 async function restore() {
   if (!confirm('Pulihkan teks asli dan ubah semua keputusan menjadi aktif lagi?')) return
   busy.value = true
@@ -110,9 +144,10 @@ async function restore() {
   } catch (e) { fail(e.message) } finally { busy.value = false }
 }
 async function download(format) {
+  if (!hasFix.value) { fail('Belum ada teks perbaikan untuk diunduh. Terapkan saran dulu.'); return }
   try {
     await documents.download(doc.value.id, format, `${doc.value.title}-revisi.${format}`)
-    say('Berkas revisi terunduh.')
+    say(`Laporan perbaikan (.${format}) terunduh.`)
   } catch (e) { fail(e.message) }
 }
 </script>
@@ -141,8 +176,9 @@ async function download(format) {
       <div class="flex flex-wrap gap-2">
         <BaseButton variant="secondary" size="sm" to="/analisis"><i class="fa-solid fa-arrow-left"></i>Ganti teks</BaseButton>
         <BaseButton variant="secondary" size="sm" :to="`/bandingkan/${doc.id}`"><i class="fa-solid fa-code-compare"></i>Bandingkan</BaseButton>
-        <BaseButton variant="secondary" size="sm" @click="download('txt')"><i class="fa-solid fa-download"></i>.txt</BaseButton>
-        <BaseButton variant="secondary" size="sm" @click="download('docx')"><i class="fa-solid fa-file-word"></i>.docx</BaseButton>
+        <BaseButton variant="secondary" size="sm" :disabled="!hasFix" @click="download('pdf')"><i class="fa-solid fa-file-pdf"></i>.pdf</BaseButton>
+        <BaseButton variant="secondary" size="sm" :disabled="!hasFix" @click="download('txt')"><i class="fa-solid fa-download"></i>.txt</BaseButton>
+        <BaseButton variant="secondary" size="sm" :disabled="!hasFix" @click="download('docx')"><i class="fa-solid fa-file-word"></i>.docx</BaseButton>
         <BaseButton variant="accent" size="sm" @click="restore"><i class="fa-solid fa-rotate-left"></i>Pulihkan asli</BaseButton>
       </div>
     </div>
@@ -200,6 +236,32 @@ async function download(format) {
             </div>
           </div>
           <div v-if="summary.length" class="mt-6 border-t-2 border-black pt-6"><CategorySummary :summary="summary" :active="filter" @select="filter = $event" /></div>
+        </BaseCard>
+
+        <BaseCard class="p-6 sm:p-8">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <p class="font-mono text-xs uppercase tracking-widest text-[#FF3000]">Laporan hasil perbaikan</p>
+            <div class="flex flex-wrap gap-2">
+              <BaseButton size="sm" :disabled="!hasFix || fixing" @click="download('pdf')"><i class="fa-solid fa-file-pdf"></i>Unduh PDF</BaseButton>
+              <BaseButton variant="secondary" size="sm" :disabled="!hasFix || fixing" @click="download('txt')"><i class="fa-solid fa-download"></i>TXT</BaseButton>
+              <BaseButton variant="secondary" size="sm" :disabled="!hasFix || fixing" @click="download('docx')"><i class="fa-solid fa-file-word"></i>DOCX</BaseButton>
+            </div>
+          </div>
+
+          <p v-if="fixing" class="mt-4 border-2 border-black bg-[#F2F2F2] px-4 py-3 font-mono text-xs uppercase tracking-widest text-black/60">
+            <i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Menerapkan saran perbaikan...
+          </p>
+          <pre v-else-if="hasFix" class="mt-4 max-h-[420px] overflow-auto whitespace-pre-wrap border-2 border-black bg-[#F2F2F2] p-4 text-[15px] leading-7">{{ revised }}</pre>
+          <div v-else class="mt-4 border-2 border-dashed border-black p-4 text-sm leading-relaxed">
+            <template v-if="!isPremium">
+              Teks yang sudah diperbaiki terbuka di Premium — termasuk unduhan PDF, DOCX, dan TXT.
+              <router-link to="/premium" class="ml-1 font-bold uppercase tracking-wide underline decoration-[#FF3000] decoration-2 underline-offset-4">Buka Premium</router-link>
+            </template>
+            <template v-else>
+              Belum ada saran yang diterapkan.
+              <button class="font-bold uppercase tracking-wide underline decoration-[#FF3000] decoration-2 underline-offset-4" @click="autoFix(true)">Perbaiki otomatis sekarang</button>
+            </template>
+          </div>
         </BaseCard>
 
         <BaseCard class="p-6 sm:p-8">

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { computeStats, computeScores, countWords, splitSentences } from '../src/services/stats.js';
 import { rankIssues, validateAiIssues } from '../src/services/aiValidate.js';
+import { splitForAi, mapLimit } from '../src/services/chunk.js';
 
 test('countWords dan statistik dasar', () => {
   const text = 'Runut memeriksa pola tulisan. Runut menandai pola yang berulang.';
@@ -103,4 +104,31 @@ test('rankIssues memakai bukti: kemunculan dan sebaran paragraf', () => {
   assert.equal(ranked[0].evidence.occurrences, 2);
   assert.equal(ranked[0].evidence.paragraphs, 2);
   assert.ok(ranked[0].evidence.rank_score > ranked[1].evidence.rank_score);
+});
+test('splitForAi memotong teks panjang tanpa menghilangkan satu karakter pun', () => {
+  const paragraph = 'Kalimat ini cukup panjang untuk menguji pemotongan teks oleh Runut. ';
+  const text = Array.from({ length: 400 }, () => paragraph).join('\n\n');
+  const chunks = splitForAi(text, 6000);
+  assert.ok(chunks.length > 1, 'teks panjang menghasilkan lebih dari satu bagian');
+  assert.equal(chunks[0].offset, 0);
+  assert.equal(chunks.map((c) => c.text).join(''), text, 'tidak ada teks yang hilang');
+  for (const c of chunks) {
+    assert.ok(c.text.length <= 6000, 'setiap bagian di bawah batas');
+    assert.equal(text.slice(c.offset, c.offset + c.text.length), c.text, 'offset menunjuk posisi yang benar');
+  }
+  assert.deepEqual(splitForAi('pendek'), [{ text: 'pendek', offset: 0 }]);
+});
+
+test('mapLimit menjaga urutan hasil sekaligus membatasi paralel', async () => {
+  let active = 0;
+  let peak = 0;
+  const out = await mapLimit([1, 2, 3, 4, 5], 2, async (n) => {
+    active += 1;
+    peak = Math.max(peak, active);
+    await new Promise((r) => setTimeout(r, 5));
+    active -= 1;
+    return n * 2;
+  });
+  assert.deepEqual(out, [2, 4, 6, 8, 10]);
+  assert.ok(peak <= 2, 'permintaan paralel tidak melebihi batas');
 });

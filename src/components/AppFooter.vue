@@ -24,7 +24,7 @@ const logo = import.meta.env.BASE_URL + 'images/logo.svg'
       </nav>
       <div>
         <p class="font-mono text-xs uppercase tracking-widest text-[#FF3000]">Batasan</p>
-        <p class="mt-4 text-sm leading-relaxed text-white/60">Gratis: 500 kata per analisis. Premium: 10.000 kata, Rp49.000 / 30 hari. Dokumen tersimpan 30 hari setelah analisis terakhir.</p>
+        <p class="mt-4 text-sm leading-relaxed text-white/60">Gratis: 500 kata per analisis. Premium: tanpa batas kata, Rp49.000 / 30 hari. Dokumen tersimpan 30 hari setelah analisis terakhir.</p>
       </div>
     </div>
   </footer>

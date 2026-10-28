@@ -2,9 +2,12 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { auth } from '../store/auth'
+import { job, clearJob } from '../store/analysis'
 
 const open = ref(false)
 const router = useRouter()
+// Penanda job analisis: proses tetap berjalan di store walau halaman berganti.
+const jobLink = () => (job.status === 'done' && job.documentId ? `/hasil/${job.documentId}` : '/analisis')
 // BASE_URL ikut nilai `base` Vite ('./') supaya logo tetap benar di root
 // maupun subpath tanpa mengubah konfigurasi hosting.
 const logo = import.meta.env.BASE_URL + 'images/logo.svg'
@@ -49,6 +52,27 @@ function logout() {
         <i :class="['fa-solid text-lg transition-transform duration-200', open ? 'fa-xmark rotate-90' : 'fa-bars']"></i>
       </button>
     </nav>
+
+    <div v-if="job.status !== 'idle'" class="border-b-4 border-black bg-[#FF3000] text-white">
+      <div class="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2 sm:px-6">
+        <router-link :to="jobLink()" class="flex min-w-0 items-center gap-2 font-mono text-xs font-bold uppercase tracking-widest">
+          <i :class="['fa-solid', job.status === 'running' ? 'fa-circle-notch fa-spin' : job.status === 'done' ? 'fa-circle-check' : 'fa-triangle-exclamation']"></i>
+          <span class="truncate">
+            <template v-if="job.status === 'running'">Menganalisis {{ job.elapsed }} dtk</template>
+            <template v-else-if="job.status === 'done'">Hasil analisis siap</template>
+            <template v-else>Analisis gagal</template>
+          </span>
+        </router-link>
+        <div class="flex shrink-0 items-center gap-2">
+          <router-link :to="jobLink()" class="border-2 border-white px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-widest hover:bg-white hover:text-[#FF3000]">
+            {{ job.status === 'running' ? 'Lihat' : job.status === 'done' ? 'Buka hasil' : 'Coba lagi' }}
+          </router-link>
+          <button v-if="job.status !== 'running'" class="h-6 w-6 border-2 border-white font-mono text-[10px] font-bold hover:bg-white hover:text-[#FF3000]" aria-label="Tutup penanda" @click="clearJob">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+    </div>
 
     <transition name="fade">
       <div v-if="open" class="border-b-4 border-black bg-white px-4 py-4 md:hidden">

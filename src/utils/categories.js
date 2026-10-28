@@ -18,4 +18,5 @@ export const DECISIONS = ['active', 'applied', 'rejected'];
 export const canon = (t) => (CATEGORIES[t] ? t : 'transition');
 
 export const FREE_WORD_LIMIT = 500;
-export const PREMIUM_WORD_LIMIT = 10000;
+// Premium tidak dibatasi jumlah kata; null = tanpa batas (sama dengan server).
+export const PREMIUM_WORD_LIMIT = null;

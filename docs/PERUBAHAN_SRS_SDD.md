@@ -172,7 +172,7 @@ Implementasi sekarang berbeda dari teks SRS/SDD. Samakan supaya dokumen tidak sa
 3. **Timeout.** SRS UC-08 exception menulis "AI Service timeout (>10 detik)". Kode memakai
    `AI_TIMEOUT_MS` (bawaan 10.000 ms; `.env` lokal diisi 90.000 ms karena model lambat).
    Tulis "timeout dikonfigurasi lewat AI_TIMEOUT_MS (bawaan 10 detik)".
-4. **Pembayaran.** SRS/SDD hanya menyebut "payment gateway". Implementasi saat ini **belum membuka
+4. **Pembayaran.** **(Diganti oleh bagian D1 di bawah.)** SRS/SDD hanya menyebut "payment gateway". Implementasi saat ini **belum membuka
    pembayaran**: halaman Premium menampilkan paket (Rp49.000 / 30 hari) dan daftar metode
    (QRIS, BCA Virtual Account, GoPay, OVO, DANA, ShopeePay, kartu kredit/debit, Alfamart/Indomaret)
    sebagai gambaran saja, dan semua endpoint `/api/payments*` menjawab 501 `PAYMENTS_DISABLED`.
@@ -180,8 +180,121 @@ Implementasi sekarang berbeda dari teks SRS/SDD. Samakan supaya dokumen tidak sa
    Midtrans QRIS pada versi sebelumnya).
 5. **Persetujuan AI.** Permintaan analisis mengirim `ai_consent: true` saat tombol Periksa ditekan;
    tanpa itu server menolak 400 `AI_CONSENT_REQUIRED`. Tambahkan langkah itu di UC-08.
-6. **Unduh & status saran.** Status saran: `active`, `applied`, `rejected` (SDD baris 306 menulis
+6. **Unduh & status saran.** **(Format unduhan diperluas di bagian D3: tambah pdf.)** Status saran: `active`, `applied`, `rejected` (SDD baris 306 menulis
    "active, rejected, applied" - samakan). Unduh tersedia `.txt` dan `.docx`.
 
-4b. **(Dihapus) Mode simulasi pembayaran.** Alur simulasi QRIS sudah tidak ada. Pembayaran
+4b. **(Diganti oleh bagian D1: mode simulasi dipakai lagi, tetapi hanya di luar produksi.)** Mode simulasi pembayaran. Alur simulasi QRIS sudah tidak ada. Pembayaran
    dinonaktifkan seluruhnya: tidak ada kode QR, transaksi, maupun webhook yang diproses.
+---
+
+## D. Perubahan putaran ini (payment gateway nyata, Premium tanpa batas kata, analisis tahan pindah halaman)
+
+Bagian ini **menggantikan** butir C.4 dan C.4b di atas. Tulis ulang SRS/SDD pada bagian yang
+disebut di bawah; sisanya tidak berubah.
+
+### D1. FR-07 Pembayaran - ganti "belum dibuka" menjadi alur lengkap
+
+**SRS BAB 3 Functional Requirements, FR-07 (dan UC terkait pembayaran).** Ganti kalimat
+"payment gateway belum diimplementasikan" dengan:
+
+> Pengguna dapat membeli Premium Rp49.000 selama 30 hari melalui halaman Premium. Metode yang
+> tersedia: QRIS, BCA/BNI/BRI/Permata Virtual Account, GoPay, ShopeePay, kartu kredit/debit,
+> Alfamart, dan Indomaret. Nomor pesanan dan nominal **selalu dibuat server**; klien hanya
+> mengirim `method`. Halaman menampilkan instruksi sesuai kanal (gambar QR, nomor VA, kode bayar,
+> deeplink, atau halaman kartu), memeriksa status otomatis tiap 5 detik, dan mengaktifkan Premium
+> hanya setelah status `paid` diterima dari gateway/webhook. Invoice PDF dan riwayat transaksi
+> tersedia pada halaman yang sama.
+
+**SRS BAB 2.4 / SDD bagian integrasi eksternal.** Tambahkan:
+
+> Gateway: Midtrans. Metode non-kartu memakai Core API (`/v2/charge`), kartu memakai Snap
+> (`/snap/v1/transactions`). Kredensial: `MIDTRANS_SERVER_KEY`, `MIDTRANS_CLIENT_KEY`,
+> `MIDTRANS_IS_PRODUCTION`, `MIDTRANS_QRIS_ACQUIRER`, `PAYMENT_EXPIRY_HOURS`. Webhook
+> `POST /api/payments/notify` diverifikasi `SHA512(order_id + status_code + gross_amount + serverKey)`
+> dan nominalnya harus sama dengan tagihan. Tanpa `MIDTRANS_SERVER_KEY`: di luar produksi server
+> memakai **mode simulasi** (ditandai jelas, ada tombol uji "Simulasikan lunas"), di produksi
+> pembelian **ditutup** (503) sehingga tidak ada Premium aktif tanpa pembayaran nyata.
+
+**SDD - tabel basis data.** Tabel `payments` (bukan lagi rancangan):
+
+| Kolom | Tipe | Catatan |
+|---|---|---|
+| `id` | text PK | |
+| `user_id` | text | pemilik transaksi |
+| `order_id` | text unique | dibuat server, `RUNUT-<waktu>-<acak>` |
+| `method`, `method_label`, `channel` | text | mis. `va_bca`, `BCA Virtual Account`, `va` |
+| `amount` | integer | dari `PREMIUM_PRICE_IDR` |
+| `status` | text | `pending`, `paid`, `failed`, `expired`, `cancelled`, `refunded` |
+| `provider`, `provider_ref` | text | `midtrans` atau `simulator` |
+| `instructions` | jsonb | nomor VA / kode bayar / URL QR / deeplink |
+| `premium_days` | integer | lama masa aktif yang dibeli |
+| `expires_at`, `paid_at`, `created_at`, `updated_at` | timestamptz | |
+
+**SDD - endpoint.** Daftar `/api/payments*` yang menjawab 501 dihapus, diganti:
+
+| Endpoint | Fungsi |
+|---|---|
+| `GET /api/payments` | katalog metode, harga, mode gateway, 20 transaksi terakhir |
+| `POST /api/payments` | buat transaksi; body `{ method }` |
+| `GET /api/payments/:orderId` | status terbaru (dipakai polling; bertanya ke gateway) |
+| `GET /api/payments/:orderId/qr` | gambar QRIS (hanya gateway asli, 404 `QR_UNAVAILABLE` selain itu) |
+| `POST /api/payments/:orderId/simulate` | tandai lunas - **hanya** mode simulasi (403 `SIMULATION_DISABLED`) |
+| `GET /api/payments/:orderId/invoice` | invoice PDF |
+| `POST /api/payments/notify` | webhook gateway (verifikasi tanda tangan) |
+
+Idempotensi: satu transaksi hanya boleh bertransisi ke `paid` sekali
+(`markPaidIfPending`), sehingga notifikasi ganda tidak menambah masa aktif dua kali.
+
+### D2. Premium tanpa batas kata
+
+**SRS - aturan batas kata (FR-02/FR-03) dan tabel perbandingan paket.** Ganti "Premium maksimal
+10.000 kata" dengan:
+
+> Akun gratis: maksimal 500 kata per analisis. Akun Premium: **tanpa batas jumlah kata**; batas
+> yang berlaku hanya batas praktis satu dokumen, yaitu 200.000 karakter (413 `TEXT_TOO_LARGE`).
+
+`GET /api/health` melaporkan `limits.premium_words: null` (null = tanpa batas). Semua teks
+marketing (landing, tentang, footer, halaman Premium) disamakan.
+
+### D3. Alur perbaikan otomatis + unduhan PDF
+
+**SRS UC-09/UC-10 (perbaikan dan unduhan).** Tambahkan langkah:
+
+> Setelah analisis selesai, akun Premium langsung menerima teks yang sudah diperbaiki: seluruh
+> saran yang lolos validasi diterapkan otomatis, sedangkan saran bertanda "perlu cek manual"
+> dilewati. Pengguna dapat menerima/menolak saran satu per satu, menerapkan semuanya, atau
+> memulihkan teks asli. Hasil perbaikan dapat diunduh sebagai **PDF**, DOCX, atau TXT.
+
+**SDD - endpoint unduhan.** `GET /api/documents/:id/download?format=txt|docx|pdf` (sebelumnya
+hanya `txt|docx`; `pdf` menjawab 400). PDF dibuat dengan `pdf-lib` dan diverifikasi dengan
+membuka ulang berkasnya di pengujian.
+
+### D4. Analisis teks panjang dipecah per bagian
+
+**SDD - alur analisis AI.** Sisipkan:
+
+> Teks Premium yang panjang dipecah menjadi bagian berukuran maksimal 6.000 karakter pada batas
+> paragraf/kalimat (`services/chunk.js`). Tiap bagian dianalisis dengan maksimal 3 permintaan
+> paralel, maksimal 12 saran per bagian dan 120 saran per dokumen. Posisi saran digeser kembali ke
+> teks asli memakai offset bagian, lalu diperiksa ulang. Bila sebagian bagian gagal, hasil bagian
+> lain tetap disimpan dan status AI menjadi `partial` (semua gagal = error asli diteruskan).
+> Prompt menyertakan ringkasan bukti yang dihitung server (frasa, pembuka, dan kata yang berulang)
+> agar temuan berdasar pola nyata, bukan tebakan model.
+
+### D5. Status job analisis di klien
+
+**SDD - komponen frontend.** Tambahkan:
+
+> Status proses analisis disimpan di store global (`src/store/analysis.js`), bukan di state
+> komponen. Berpindah halaman tidak membatalkan permintaan; `AppHeader` menampilkan penanda
+> "Menganalisis N dtk" dan tautan ke hasil ketika selesai. Draf teks yang sudah ditempel ikut
+> disimpan di store agar tidak hilang saat pengguna kembali ke halaman analisis. Memuat ulang
+> browser tetap menghentikan job (batasan yang disadari, dicatat di README).
+
+### D6. Perubahan kontrak kecil lain
+
+1. `GET /api/health` â†’ `premium.available` tidak lagi selalu `false`, ditambah `premium.mode`
+   (`midtrans` / `simulator` / `unavailable`); `limits.premium_words` = `null`.
+2. `POST /api/payments` mengembalikan `201 { payment }`; `payment.instructions` berisi data yang
+   dibutuhkan tiap kanal (bukan tautan statis).
+3. Tidak ada endpoint pembayaran yang menerima nominal dari klien.

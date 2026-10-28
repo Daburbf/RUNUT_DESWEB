@@ -23,7 +23,7 @@ const steps = [
 
 const plans = [
   { name: 'Gratis', price: 'Rp0', rows: ['500 kata per analisis', 'Statistik tulisan', 'Maksimal 3 masalah teratas', 'Saran perbaikan terkunci'] },
-  { name: 'Premium', price: 'Rp49.000 / 30 hari', rows: ['10.000 kata per analisis', 'Seluruh masalah + penjelasan', 'Semua saran terbuka', 'Terapkan sekaligus', 'Unduh DOCX + TXT'] },
+  { name: 'Premium', price: 'Rp49.000 / 30 hari', rows: ['Tanpa batas kata per analisis', 'Seluruh masalah + penjelasan', 'Semua saran terbuka', 'Terapkan sekaligus', 'Unduh PDF, DOCX, TXT','Perbaikan otomatis sekali klik'] },
 ]
 
 const faqs = [

@@ -68,18 +68,37 @@ create table if not exists issues (
 );
 create index if not exists issues_analysis_idx on issues (analysis_id, start_pos);
 
--- SDD 3.3 mencantumkan tabel payments. Tabelnya dibuat agar rancangan basis
--- data utuh, tetapi TIDAK ada kode yang menulis ke sini: pembayaran belum
--- dibuka dan semua endpoint /api/payments menjawab 501.
 create table if not exists payments (
   id uuid primary key,
   user_id uuid not null references users(id) on delete cascade,
-  payment_gateway_ref text,
-  amount integer,
+  order_id text not null,
+  method text not null,
+  method_label text,
+  channel text,
+  amount integer not null,
   status text not null default 'pending',
+  provider text,
+  provider_ref text,
+  instructions jsonb not null default '{}'::jsonb,
+  premium_days integer not null default 30,
+  expires_at timestamptz,
+  paid_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+-- Tabel payments sudah ada di basis data lama: tambahkan kolom baru tanpa
+-- menghapus data yang sudah tercatat.
+alter table payments add column if not exists order_id text;
+alter table payments add column if not exists method text;
+alter table payments add column if not exists method_label text;
+alter table payments add column if not exists channel text;
+alter table payments add column if not exists provider text;
+alter table payments add column if not exists instructions jsonb not null default '{}'::jsonb;
+alter table payments add column if not exists premium_days integer not null default 30;
+alter table payments add column if not exists expires_at timestamptz;
+alter table payments add column if not exists paid_at timestamptz;
+create unique index if not exists payments_order_id_key on payments (order_id);
+create index if not exists payments_user_idx on payments (user_id, created_at desc);
 
 create table if not exists refresh_tokens (
   id uuid primary key,
@@ -395,5 +414,67 @@ export async function createPostgresRepositories(connectionString) {
     },
   };
 
-  return { users, refreshTokens, documents, analyses, issues, driver: 'postgresql', close: () => pool.end() };
+  const payments = {
+    async create(row) {
+      const { rows } = await pool.query(
+        `insert into payments
+           (id, user_id, order_id, method, method_label, channel, amount, status,
+            provider, provider_ref, instructions, premium_days, expires_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13)
+         returning *`,
+        [
+          randomUUID(), row.user_id, row.order_id, row.method, row.method_label || null,
+          row.channel || null, row.amount, row.status || 'pending', row.provider || null,
+          row.provider_ref || null, JSON.stringify(row.instructions || {}),
+          row.premium_days || 30, row.expires_at ? new Date(row.expires_at) : null,
+        ],
+      );
+      return rows[0];
+    },
+    async findById(id) {
+      if (!isUuid(id)) return null;
+      const { rows } = await pool.query('select * from payments where id = $1', [id]);
+      return rows[0] || null;
+    },
+    async findByOrderId(order_id) {
+      const { rows } = await pool.query('select * from payments where order_id = $1 limit 1', [order_id]);
+      return rows[0] || null;
+    },
+    async listByUser(user_id, { limit = 30 } = {}) {
+      if (!isUuid(user_id)) return [];
+      const { rows } = await pool.query(
+        'select * from payments where user_id = $1 order by created_at desc limit $2',
+        [user_id, Math.max(1, Math.min(Number(limit) || 30, 100))],
+      );
+      return rows;
+    },
+    async update(id, patch) {
+      if (!isUuid(id)) return null;
+      const allowed = new Set(['status', 'provider_ref', 'instructions', 'paid_at', 'expires_at']);
+      const keys = Object.keys(patch || {}).filter((k) => allowed.has(k));
+      if (!keys.length) return null;
+      const values = keys.map((k) => (k === 'instructions' ? JSON.stringify(patch[k]) : patch[k]));
+      const set = keys.map((k, i) => (k === 'instructions' ? `instructions = $${i + 2}::jsonb` : `${k} = $${i + 2}`)).join(', ');
+      const { rows } = await pool.query(
+        `update payments set ${set}, updated_at = now() where id = $1 returning *`,
+        [id, ...values],
+      );
+      return rows[0] || null;
+    },
+    // Satu-satunya jalur yang boleh menandai lunas: syarat status <> 'paid'
+    // dievaluasi oleh basis data, jadi dua notifikasi bersamaan tidak bisa
+    // sama-sama memperpanjang Premium.
+    async markPaidIfPending(id, patch) {
+      if (!isUuid(id)) return null;
+      const { rows } = await pool.query(
+        `update payments set status = 'paid', paid_at = now(), provider_ref = coalesce($2, provider_ref),
+           updated_at = now()
+         where id = $1 and status <> 'paid' returning *`,
+        [id, patch?.provider_ref || null],
+      );
+      return rows[0] || null;
+    },
+  };
+
+  return { users, refreshTokens, documents, analyses, issues, payments, driver: 'postgresql', close: () => pool.end() };
 }

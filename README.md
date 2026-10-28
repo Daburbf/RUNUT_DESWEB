@@ -58,7 +58,8 @@ dan **bukan** hasil pemeriksaan plagiarisme: tidak ada korpus pembanding.
 | Autentikasi | bcryptjs, JWT access token (di memori browser), refresh cookie HttpOnly + rotasi |
 | Analisis AI | 9Router (endpoint kompatibel OpenAI) melalui `server/src/services/aiProvider.js` |
 | Penyimpanan | Kontrak repository dengan dua adapter: **memori** (bawaan) dan **PostgreSQL** (`pg`) untuk akun & sesi |
-| Dokumen | mammoth (DOCX), pdf-parse (PDF), docx (ekspor DOCX) |
+| Dokumen | mammoth (DOCX masuk), pdf-parse (PDF masuk), docx (ekspor DOCX), pdf-lib (ekspor PDF) |
+| Pembayaran | Midtrans Core API + Snap (kartu) lewat `server/src/services/payments.js`; mode simulasi otomatis bila kunci kosong di luar produksi |
 
 <p align="right">(<a href="#readme-top">kembali ke atas</a>)</p>
 
@@ -105,8 +106,13 @@ Opsional:
 
 ```env
 DATABASE_URL=postgres://postgres:rahasia@localhost:5432/runut   # kosong = memori sementara
-PREMIUM_PRICE_IDR=49000        # tampilan harga di halaman Premium & footer
+PREMIUM_PRICE_IDR=49000        # harga yang dipakai server saat membuat transaksi
 PREMIUM_DURATION_DAYS=30
+MIDTRANS_SERVER_KEY=           # kosong = mode simulasi (dev) / pembelian ditutup (produksi)
+MIDTRANS_CLIENT_KEY=
+MIDTRANS_IS_PRODUCTION=false
+MIDTRANS_QRIS_ACQUIRER=gopay
+PAYMENT_EXPIRY_HOURS=24
 MAIL_HOST=smtp.mailtrap.io     # + MAIL_PORT/MAIL_USER/MAIL_PASS untuk lupa sandi
 FRONTEND_URL=http://localhost:5173
 ```
@@ -140,27 +146,41 @@ npm.cmd run dev
 ```
 
 Periksa `http://localhost:3000/api/health`. Nilai yang dilaporkan apa adanya:
-`storage` (adapter aktif), `ai.configured`, `premium.available` (selalu `false`),
+`storage` (adapter aktif), `ai.configured`, `premium.available`/`premium.mode`
+(`midtrans`, `simulator`, atau `unavailable`), `limits.premium_words` (`null` = tanpa batas),
 `mail_configured`.
 
 Alur utama:
 
 1. **Daftar → Masuk** (akun disimpan di PostgreSQL bila `DATABASE_URL` diisi).
 2. **Analisis**: tempel teks (≥20 kata) atau unggah TXT/DOCX/PDF ≤5 MB. Teks dikirim ke
-   layanan AI yang dikonfigurasi server saat tombol analisis ditekan.
+   layanan AI yang dikonfigurasi server saat tombol analisis ditekan. Proses berjalan di
+   store global: pindah halaman tidak menghentikannya, dan penanda di header menunjukkan
+   detik berjalan sampai hasil siap.
 3. **Hasil**: statistik tulisan, panel **Similarity & penggunaan AI**, teks bersorotan.
-   Akun gratis melihat maksimal 3 masalah; saran perbaikan terkunci.
-4. **Perbaiki**: terima/tolak per saran, terapkan semua yang aman, pulihkan teks asli,
-   lalu **Bandingkan** sebelum/sesudah dan unduh `.txt`/`.docx`.
+   Akun gratis melihat maksimal 3 masalah; saran perbaikan dan teks hasil perbaikan terkunci.
+4. **Perbaiki**: Premium langsung menerima laporan yang sudah diperbaiki otomatis (saran
+   berisiko dilewati). Saran bisa diterima/ditolak satu per satu, diterapkan sekaligus,
+   dipulihkan ke teks asli, lalu diunduh sebagai **PDF**, DOCX, atau TXT.
 5. **Riwayat**: cari, buka detail, ganti judul, hapus satu atau banyak (dengan konfirmasi).
 6. **Lupa sandi**: minta tautan lewat email (berlaku ≤30 menit) - butuh SMTP.
 
 ### Premium & pembayaran
 
-Halaman Premium **hanya menampilkan** paket Rp49.000 / 30 hari beserta daftar metode
-pembayaran (QRIS, BCA Virtual Account, GoPay, OVO, DANA, ShopeePay, kartu kredit/debit,
-Alfamart/Indomaret). Belum ada integrasi payment gateway: semua endpoint `/api/payments*`
-menjawab `501 PAYMENTS_DISABLED`, dan tidak ada tombol pembelian yang bisa diklik.
+Satu alur, tanpa AI: pilih metode (QRIS, BCA/BNI/BRI/Permata Virtual Account, GoPay,
+ShopeePay, kartu kredit/debit, Alfamart, Indomaret) -> server membuat nomor pesanan dan
+nominal Rp49.000 sendiri -> halaman menampilkan instruksi (QR/nomor VA/kode bayar/deeplink)
+-> status diperiksa otomatis tiap 5 detik -> Premium aktif setelah pembayaran diterima ->
+invoice PDF dan riwayat transaksi tersedia di halaman yang sama.
+
+| Mode | Syarat | Perilaku |
+|---|---|---|
+| `midtrans` | `MIDTRANS_SERVER_KEY` terisi | Transaksi nyata lewat Midtrans Core API; kartu lewat Snap; webhook `/api/payments/notify` diverifikasi SHA512 |
+| `simulator` | kunci kosong, `NODE_ENV` bukan produksi | Tanpa uang berpindah; tombol "Simulasikan lunas" hanya ada di mode ini |
+| `unavailable` | kunci kosong, `NODE_ENV=production` | Pembelian ditutup (503) - tidak ada Premium aktif tanpa pembayaran nyata |
+
+Nominal dan nomor pesanan selalu dibuat server; isi body hanya `method`. Transisi ke lunas
+idempoten (`markPaidIfPending`), jadi webhook ganda tidak menambah masa aktif dua kali.
 
 <p align="right">(<a href="#readme-top">kembali ke atas</a>)</p>
 
@@ -168,7 +188,7 @@ menjawab `501 PAYMENTS_DISABLED`, dan tidak ada tombol pembelian yang bisa dikli
 
 ```powershell
 cd server
-npm.cmd test          # 26 tes lulus + 1 dilewati, tanpa DB dan tanpa jaringan nyata
+npm.cmd test          # 34 tes lulus + 1 dilewati, tanpa DB dan tanpa jaringan nyata
 cd ..
 npm.cmd run build     # build Vite
 ```
@@ -181,9 +201,13 @@ $env:RUNUT_TEST_DATABASE_URL='postgres://postgres:sandi@localhost:5432/runut'; n
 
 Tes backend memakai stub HTTP untuk 9Router, jadi jalur permintaan provider ikut diuji.
 Cakupan: statistik & skor deterministik · validasi keluaran AI (menolak koordinat palsu,
-saran berisiko, kategori liar) · register/login/me/refresh/logout + rotasi cookie ·
+saran berisiko, kategori liar)
 isolasi dokumen antar-pengguna (403) · 503 AI eksplisit · persetujuan AI wajib ·
-batas kata 500 / 10.000 · unduh TXT & DOCX · keputusan saran + stale position (409) ·
+batas kata 500 untuk gratis / tanpa batas untuk Premium, pemotongan teks panjang
+(`splitForAi` + `mapLimit`), unduh PDF/DOCX/TXT (PDF dibaca ulang dengan `pdf-lib`),
+keputusan saran + stale position (409), alur bayar mode simulasi (nominal dari server,
+lunas idempoten, QR asli tidak dikarang, kepemilikan transaksi), webhook: tanda tangan
+SHA512, nominal, dan status expire.
 endpoint pembayaran nonaktif (501).
 
 <p align="right">(<a href="#readme-top">kembali ke atas</a>)</p>
@@ -203,7 +227,7 @@ server/
     config.js             # semua pembacaan environment
     repositories/         # index.js (titik tukar) · memory.js · postgres.js
     middleware/           # auth (JWT) + error terpusat
-    routes/               # auth, analysis, documents, payments (nonaktif)
+    routes/               # auth, analysis, documents, payments
     services/             # stats, aiProvider, aiValidate, retention, mailer
   test/                   # app.test.js, units.test.js, payments.test.js, payments-notify.test.js, postgres.test.js
 docs/
@@ -218,9 +242,14 @@ docs/
 - **Dokumen & hasil analisis masih di memori** - hilang saat server dimatikan. Hanya
   akun dan sesi yang bisa disimpan ke PostgreSQL.
 - **Similarity & Penggunaan AI bukan cek plagiarisme.** Tidak ada basis data pembanding.
-- **Pembayaran belum dibuka.** Harga dan metode di halaman Premium hanya tampilan.
+- **Premium hanya bisa diaktifkan lewat pembayaran.** Tanpa `MIDTRANS_SERVER_KEY` di luar
+  produksi, pembayaran memakai mode simulasi yang jelas ditandai di halaman Premium.
+- **Job analisis bertahan saat pindah halaman, bukan saat halaman dimuat ulang.** Memuat
+  ulang browser menghentikan permintaan yang sedang berjalan.
+- **Batas praktis satu dokumen 200.000 karakter** (~30.000 kata); di atas itu server
+  menjawab 413 dan meminta teks dipecah.
 - **Retensi dokumen 30 hari** sejak analisis terakhir, atau sampai dihapus manual.
-- **Akun Premium hanya bisa diaktifkan dari kode** (operator/pengujian), bukan lewat HTTP.
+- **Akun Premium hanya bisa diaktifkan lewat pembayaran atau webhook gateway.**
 - Kegagalan provider AI **tidak pernah** diganti hasil buatan: server menjawab error nyata.
 
 <p align="right">(<a href="#readme-top">kembali ke atas</a>)</p>
@@ -228,7 +257,7 @@ docs/
 ## Yang ditunda
 
 - Adapter PostgreSQL untuk dokumen, analisis, dan saran (kini masih di memori).
-- Integrasi payment gateway sungguhan setelah harga dan metode ditetapkan.
+- Halaman admin untuk melihat seluruh transaksi lintas pengguna.
 - Provider AI tambahan (mis. Ollama/Qwen) di balik antarmuka provider yang sama.
 
 <p align="right">(<a href="#readme-top">kembali ke atas</a>)</p>

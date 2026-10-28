@@ -86,3 +86,32 @@ export async function restoreSession() {
 }
 
 export const apiBase = BASE;
+
+// Unduhan berautentikasi: token dikirim lewat header, bukan URL. Dipakai untuk
+// berkas revisi (PDF/TXT/DOCX) dan invoice pembayaran.
+export async function fetchBlob(path) {
+  const res = await fetch(BASE + path, {
+    headers: { Authorization: `Bearer ${accessToken || ''}` },
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, payload.error ? payload : { error: 'Berkas tidak bisa diunduh. Coba lagi.' });
+  }
+  return res.blob();
+}
+
+export function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+export async function downloadFile(path, filename) {
+  saveBlob(await fetchBlob(path), filename);
+}

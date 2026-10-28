@@ -45,7 +45,7 @@ keputusan yang diambil dan alasannya. Tag `(D1)` ... `(D9)` dirujuk dari kode.
 - Sumber kebenaran ada di `server/src/services/stats.js` (`CATEGORIES`);
   `src/utils/categories.js` menyalin hex tersebut persis.
 
-## D4 - Batas kata: 500 gratis / 10.000 premium
+## D4 - Batas kata: 500 gratis / 10.000 premium - **DIGANTI oleh D16**
 
 - **Keputusan:** FR-03 ditegakkan **di server** (`routes/analysis.js`, HTTP 403
   `code: WORD_LIMIT`). Frontend hanya menampilkan penghitung kata real-time dan
@@ -179,7 +179,7 @@ keputusan yang diambil dan alasannya. Tag `(D1)` ... `(D9)` dirujuk dari kode.
 - **Status:** hanya untuk demo/pengembangan - bukan alur pembayaran produksi. Data tetap
   hilang saat server dimulai ulang.
 
-## D13 - Pembayaran dinonaktifkan (menggantikan D9 dan D9b)
+## D13 - Pembayaran dinonaktifkan (menggantikan D9 dan D9b) - **DIGANTI oleh D15**
 
 - **Konteks:** pemilik produk meminta pembayaran dan halaman Premium menjadi
   **tampilan saja** - fungsi internalnya dihapus dan tidak ada tombol yang bisa
@@ -211,3 +211,69 @@ keputusan yang diambil dan alasannya. Tag `(D1)` ... `(D9)` dirujuk dari kode.
 - **Catatan keamanan:** nilai kolom yang boleh diubah lewat `users.update()`
   dibatasi daftar putih (`USER_COLUMNS`) supaya nama kolom dari luar tidak pernah
   masuk ke SQL; seluruh nilai dikirim sebagai parameter, bukan disisipkan ke string.
+## D15 - Payment gateway Midtrans penuh, satu jalur, tanpa AI (menggantikan D13)
+
+- **Konteks:** pemilik produk meminta payment gateway "selengkap Shopee", logis, tidak
+  memakai AI, dan tidak menyulitkan pengguna.
+- **Keputusan:** satu jalur deterministik di `services/payments.js`. Katalog 10 metode
+  (QRIS, VA BCA/BNI/BRI/Permata, GoPay, ShopeePay, kartu, Alfamart, Indomaret) dikirim
+  server beserta harga. Klien hanya mengirim `method`; nomor pesanan dan nominal dibuat
+  server. Metode non-kartu memakai Core API `/v2/charge`, kartu memakai Snap. Tidak ada
+  model AI yang menyentuh nominal, status, atau keputusan pembayaran.
+- **Tiga mode yang dilaporkan apa adanya** (`paymentMode()`): `midtrans` (kunci terisi),
+  `simulator` (kunci kosong, bukan produksi - ada tombol uji "Simulasikan lunas"),
+  `unavailable` (kunci kosong, produksi - `503 PAYMENTS_UNAVAILABLE`). Tidak ada kode QR
+  palsu yang diklaim QRIS asli: `GET /:orderId/qr` menjawab `404 QR_UNAVAILABLE` bila
+  transaksi bukan milik gateway asli.
+- **Idempotensi:** `payments.markPaidIfPending()` hanya mengizinkan satu transisi ke
+  `paid`; `users.extendPremium()` dipanggil setelah transisi itu berhasil. Webhook ganda
+  atau tombol "periksa status" yang ditekan berkali-kali tidak menambah masa aktif dua kali.
+- **Keamanan webhook:** tanda tangan `SHA512(order_id + status_code + gross_amount +
+  serverKey)` wajib cocok; nominal notifikasi harus sama dengan tagihan; kepemilikan
+  transaksi diperiksa pada setiap endpoint pengguna (403 untuk akun lain).
+- **Batas jujur:** tanpa kredensial Midtrans, alur nyata tidak bisa diuji ke gateway.
+  Pengujian menutup jalur simulasi, verifikasi tanda tangan, nominal, dan idempotensi.
+
+## D16 - Premium tanpa batas kata (menggantikan D4)
+
+- **Keputusan:** `PREMIUM_WORD_LIMIT = null` di server dan frontend; `null` berarti tanpa
+  batas dan dilaporkan sebagai `limits.premium_words: null` pada `/api/health`. Batas yang
+  tersisa hanya batas praktis satu dokumen: 200.000 karakter (`413 TEXT_TOO_LARGE`) dan
+  unggahan 5 MB, keduanya divalidasi di server.
+- **Alasan:** permintaan pemilik produk ("premium sepuasnya, jangan 10k aja") sekaligus
+  menjaga biaya dan waktu tunggu tetap masuk akal.
+
+## D17 - Analisis teks panjang dipecah per bagian
+
+- **Keputusan:** `services/chunk.js` memotong teks pada batas paragraf/kalimat (maks 6.000
+  karakter per bagian) dan mengembalikan offset. Bagian dijalankan maksimal 3 paralel
+  (`mapLimit`), maksimal 12 saran per bagian dan 120 per dokumen. Posisi saran digeser
+  dengan offset lalu **diperiksa ulang** terhadap teks asli; saran yang tidak cocok dibuang.
+- **Kegagalan sebagian:** bagian yang gagal tidak menggagalkan semuanya - hasil bagian lain
+  disimpan dan `ai_status` menjadi `partial` beserta peringatan. Bila semua bagian gagal,
+  error asli provider diteruskan (tidak pernah diganti hasil buatan).
+- **Bukti dari server:** prompt menerima ringkasan yang dihitung program (frasa, pembuka,
+  dan kata yang benar-benar berulang) sehingga temuan berdasar pola nyata.
+
+## D18 - Perbaikan otomatis sekali klik + unduhan PDF
+
+- **Keputusan:** perbaikan otomatis memakai `PATCH /api/documents/:id/issues` dengan
+  `{ accept_all: true }` yang sudah ada - tidak ada endpoint baru. Saran bertanda
+  `needs_manual_review` tetap dilewati agar makna tulisan tidak berubah. Halaman hasil
+  menjalankannya sekali secara otomatis untuk akun Premium setelah analisis.
+- **Ekspor PDF:** `services/pdf.js` memakai `pdf-lib` (font Helvetica bawaan, banyak
+  halaman, tanpa tabel/gambar). Percobaan menulis PDF sendiri gagal diverifikasi pembaca
+  PDF, jadi pustaka nyata dipakai. Verifikasi pengujian: berkas dibuka ulang dengan
+  `PDFDocument.load()` dan jumlah halaman diperiksa.
+- **Batas jujur:** PDF hanya teks polos; tata letak kaya (tabel, gambar) belum ada.
+
+## D19 - Job analisis di store global + penanda header
+
+- **Konteks:** analisis berhenti dan formulir kembali kosong saat pengguna berpindah
+  halaman karena seluruh state berada di `AnalyzeView.vue` yang di-unmount.
+- **Keputusan:** `src/store/analysis.js` memegang status job (idle/running/done/error),
+  penghitung detik, hasil terakhir, dan draf teks. `AppHeader` menampilkan penanda
+  berjalan/selesai dengan tautan ke hasil. Navigasi ke halaman hasil hanya dilakukan bila
+  komponen masih terpasang; bila tidak, pengguna membuka hasil dari penanda header.
+- **Batas jujur:** job hidup di memori tab. Memuat ulang browser (F5) menghentikan job;
+  melanjutkan setelah reload butuh penyimpanan job di server dan belum dibuat.

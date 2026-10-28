@@ -168,6 +168,25 @@ test('batas kata dan teks pendek divalidasi di server', async () => {
   assert.equal(long.body.details.limit, 500);
 });
 
+test('premium: tanpa batas kata dan teks panjang dipecah per bagian', async () => {
+  const agent = request.agent(app);
+  const user = await newUser(agent, 'Premium Uji');
+  const { users } = await import('../src/repositories/index.js');
+  await users.extendPremium(user.id, 30);
+  const auth = { Authorization: `Bearer ${user.token}` };
+
+  const paragraph = 'Laporan ini disusun untuk memeriksa pola tulisan. Selain itu penulis menambah data pendukung. Selain itu penulis memperkuat argumen supaya pembaca yakin.';
+  const text = Array.from({ length: 100 }, () => paragraph).join('\n\n');
+  const res = await agent.post('/api/analysis').set(auth)
+    .send({ text, title: 'Laporan Panjang', ai_consent: true });
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+  assert.equal(res.body.meta.is_premium, true);
+  assert.equal(res.body.analysis.locked, false);
+  assert.ok(res.body.analysis.stats.word_count > 500, 'teks di atas 500 kata diterima untuk Premium');
+  assert.ok(res.body.analysis.ai.sections >= 2, 'teks panjang dipecah menjadi beberapa bagian');
+  assert.equal(res.body.meta.shown, res.body.issues.length, 'seluruh saran terbuka untuk Premium');
+});
+
 test('analisis gratis: statistik dihitung backend, maksimal 3 masalah ditampilkan', async () => {
   const agent = request.agent(app);
   const user = await newUser(agent);
@@ -302,7 +321,16 @@ test('riwayat: daftar, kepemilikan dokumen, unduhan, dan hapus', async () => {
   assert.match(docx.headers['content-type'], /wordprocessingml/);
   assert.ok(Number(docx.headers['content-length']) > 0, 'berkas DOCX tidak kosong');
 
-  const badFormat = await owner.get(`/api/documents/${docId}/download?format=pdf`).set(auth);
+  const pdf = await owner.get(`/api/documents/${docId}/download?format=pdf`).set(auth);
+  assert.equal(pdf.status, 200);
+  assert.match(pdf.headers['content-type'], /application\/pdf/);
+  assert.ok(pdf.body.length > 500, 'berkas PDF tidak kosong');
+  // PDF dibaca ulang agar strukturnya benar-benar sah, bukan sekadar byte awal.
+  const { PDFDocument } = await import('pdf-lib');
+  const reloaded = await PDFDocument.load(pdf.body);
+  assert.ok(reloaded.getPageCount() >= 1, 'PDF hasil unduhan bisa dibuka kembali');
+
+  const badFormat = await owner.get(`/api/documents/${docId}/download?format=rtf`).set(auth);
   assert.equal(badFormat.status, 400);
 
   const del = await owner.delete('/api/documents').set(auth).send({ ids: [docId] });

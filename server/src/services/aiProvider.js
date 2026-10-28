@@ -50,16 +50,17 @@ function buildSystemPrompt() {
   ].join('\n');
 }
 
-function buildUserPrompt(text, maxIssues) {
+function buildUserPrompt(text, maxIssues, evidence) {
   return [
     `Analisis teks berikut. Kembalikan maksimal ${maxIssues} masalah paling kuat buktinya.`,
     'Skema tiap issue: {"type":"<kategori>","start":<int>,"end":<int>,"text":"<kutipan persis>","explanation":"<penjelasan>","suggestion":"<saran>","needs_review":<bool>}.',
     'Bila tidak ada masalah yang terbukti, kembalikan {"issues":[]}.',
+    evidence ? `Pola berulang yang dihitung program pada dokumen ini (pakai sebagai bukti, jangan mengarang di luar teks): ${evidence}.` : '',
     'Teks yang dianalisis:',
     '<<<',
     text,
     '>>>',
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 function extractJson(raw) {
@@ -100,7 +101,7 @@ function explainHttpStatus(status, body) {
 
 // Parameter permintaan sengaja minimal (model, messages, temperature) karena
 // tidak semua model mendukung parameter tambahan seperti response_format.
-export async function analyzeWithProvider(text, { maxIssues = 30 } = {}, env = process.env) {
+export async function analyzeWithProvider(text, { maxIssues = 30, evidence = '' } = {}, env = process.env) {
   const info = getProviderInfo(env);
   const impl = PROVIDERS[info.provider];
   if (!impl) {
@@ -118,7 +119,7 @@ export async function analyzeWithProvider(text, { maxIssues = 30 } = {}, env = p
         model: info.model,
         messages: [
           { role: 'system', content: buildSystemPrompt() },
-          { role: 'user', content: buildUserPrompt(text, maxIssues) },
+          { role: 'user', content: buildUserPrompt(text, maxIssues, evidence) },
         ],
         temperature: 0.2,
       },

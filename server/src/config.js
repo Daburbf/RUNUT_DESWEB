@@ -42,11 +42,21 @@ export const config = {
   },
 
   // Harga Premium dipakai seragam oleh halaman Premium dan footer website.
-  // Pembayaran belum dibuka: nilai ini hanya untuk tampilan, bukan transaksi.
   premium: {
     priceIdr: Number(process.env.PREMIUM_PRICE_IDR || 49000),
     durationDays: Number(process.env.PREMIUM_DURATION_DAYS || 30),
-    available: false,
+  },
+
+  // Payment gateway. Kosong = mode simulasi (hanya di luar produksi), supaya
+  // alur bayar tetap bisa dicoba tanpa kredensial. Tidak ada kode QR palsu
+  // yang diklaim sebagai QRIS asli.
+  payments: {
+    serverKey: process.env.MIDTRANS_SERVER_KEY || '',
+    clientKey: process.env.MIDTRANS_CLIENT_KEY || '',
+    isProduction: String(process.env.MIDTRANS_IS_PRODUCTION || 'false') === 'true',
+    apiBase: (process.env.MIDTRANS_API_BASE || '').replace(/\/$/, ''),
+    qrisAcquirer: process.env.MIDTRANS_QRIS_ACQUIRER || 'gopay',
+    expiryHours: Number(process.env.PAYMENT_EXPIRY_HOURS || 24),
   },
 
   mail: {
@@ -60,8 +70,9 @@ export const config = {
   },
 };
 
-// Pembayaran belum dibuka: tidak ada tarif yang bisa ditagih dan tidak ada
-// jalur HTTP untuk mengaktifkan Premium. Tampilan Premium hanya gambaran.
+// Pembayaran: tanpa MIDTRANS_SERVER_KEY, pembelian hanya bisa disimulasikan di
+// luar produksi. Produksi tanpa kunci berarti pembelian ditutup (tidak pernah
+// mengaktifkan Premium tanpa pembayaran nyata).
 export function checkStartupConfig() {
   const problems = [];
   if (ephemeral.length) {
@@ -70,10 +81,14 @@ export function checkStartupConfig() {
   if (!config.ai.baseUrl || !config.ai.model || !config.ai.apiKey) {
     problems.push('Konfigurasi AI belum lengkap (AI_BASE_URL/AI_API_KEY/AI_MODEL) - endpoint analisis menjawab 503 sampai dilengkapi.');
   }
-  problems.push('Pembayaran belum dibuka: halaman Premium hanya menampilkan paket dan metode pembayaran sebagai gambaran; /api/payments menjawab 501.');
+  if (!config.payments.serverKey) {
+    problems.push(config.env === 'production'
+      ? 'MIDTRANS_SERVER_KEY kosong: pembelian Premium ditutup di produksi.'
+      : 'MIDTRANS_SERVER_KEY kosong: pembayaran berjalan dalam mode SIMULASI (tidak ada uang berpindah).');
+  }
   if (!config.mail.configured) problems.push('SMTP belum dikonfigurasi - reset password via email menjawab 503.');
   if (process.env.DEMO_PREMIUM === '1') {
-    problems.push('DEMO_PREMIUM=1: setiap akun baru langsung berstatus Premium (khusus demo, penyimpanan memori). Kosongkan untuk perilaku normal.');
+    problems.push('DEMO_PREMIUM=1: setiap akun baru langsung berstatus Premium (khusus demo). Kosongkan untuk menguji alur pembayaran.');
   }
   return problems;
 }

@@ -1,6 +1,6 @@
 // Akses dokumen via backend. Draf analisis aktif tetap di sessionStorage agar
 // refresh di halaman hasil tidak menghilangkan konteks.
-import { api, apiBase, session } from '../utils/api';
+import { api, downloadFile } from '../utils/api';
 
 const DRAFT_KEY = 'runut_current_v2';
 
@@ -24,18 +24,6 @@ export const documents = {
 
   // Unduh via fetch berautentikasi (token di header, bukan query) lalu blob.
   async download(id, format, filename) {
-    const res = await fetch(`${apiBase}/api/documents/${id}/download?format=${format}`, {
-      headers: { Authorization: `Bearer ${session.access || ''}` },
-      credentials: 'include',
-    });
-    if (!res.ok) throw new Error('Unduhan gagal. Coba lagi.');
-    const blob = await res.blob();
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = filename || `runut-revisi.${format === 'docx' ? 'docx' : 'txt'}`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    await downloadFile(`/api/documents/${id}/download?format=${format}`, filename || `runut-revisi.${format}`);
   },
 };

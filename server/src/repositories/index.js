@@ -15,6 +15,7 @@ const active = {
   documents: memory.documents,
   analyses: memory.analyses,
   issues: memory.issues,
+  payments: memory.payments,
 };
 const delegate = (name) => new Proxy({}, {
   get: (_target, prop) => active[name][prop]?.bind(active[name]),
@@ -25,6 +26,7 @@ export const refreshTokens = delegate('refreshTokens');
 export const documents = delegate('documents');
 export const analyses = delegate('analyses');
 export const issues = delegate('issues');
+export const payments = delegate('payments');
 
 export const storage = {
   driver: 'memori',
@@ -41,7 +43,7 @@ export async function initStorage(url = process.env.DATABASE_URL || '') {
     const pg = await createPostgresRepositories(url);
     for (const name of Object.keys(active)) active[name] = pg[name];
     storage.driver = 'postgresql';
-    storage.detail = 'PostgreSQL (users, documents, analysis_results, issues, refresh_tokens)';
+    storage.detail = 'PostgreSQL (users, documents, analysis_results, issues, refresh_tokens, payments)';
     storage.note = 'Seluruh data website tersimpan di PostgreSQL.';
   } catch (err) {
     storage.driver = 'memori';
@@ -54,4 +56,4 @@ export async function initStorage(url = process.env.DATABASE_URL || '') {
   return storage;
 }
 
-export default { users, refreshTokens, documents, analyses, issues };
+export default { users, refreshTokens, documents, analyses, issues, payments };
